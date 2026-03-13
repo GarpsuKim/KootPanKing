@@ -15,7 +15,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class AnalogClockSwing extends JFrame {	
-    private static final String thisProgramName = "[KootPanKing 끝판왕 (v1.63)]";
+    private static final String thisProgramName = "[KootPanKing 끝판왕 (v1.64)]";
     // ── Alarm ─────────────────────────────────────────────────────
     // AlarmEntry/알람 로직+UI 는 AlarmController.java 로 분리됨
     AlarmController alarmController;
@@ -861,6 +861,7 @@ public class AnalogClockSwing extends JFrame {
         if (slideImages.isEmpty()) return;
         // 이미지가 있으면 수동(간격=0) 포함 항상 다른 배경 모드 해제
         stopShowTimer();
+        stopItsCctv();
         galaxyMode = false;
         matrixMode = false;
         rainMode = false; snowMode = false; fireMode = false;
@@ -987,6 +988,7 @@ public class AnalogClockSwing extends JFrame {
         rainMode = false; snowMode = false; fireMode = false;
         sparkleMode = false; bubbleMode = false;
         stopCamera();
+        stopItsCctv();
         stopSlideTimer();
         if (showInterval > 0) {
             showTimer = new Timer(showInterval * 1000, e -> {
@@ -1630,8 +1632,18 @@ public class AnalogClockSwing extends JFrame {
     /** 프로그램 종료 직전 이메일 + 텔레그램 전송 후 종료 */
     private void sendShutdownEmailAndExit() {
         if (shutdownGuard != null) shutdownGuard.cancel();
-        tg.sendShutdownNotice();
-        gmail.sendShutdownNotice(() -> { AppLogger.close(); System.exit(0); });
+        // Gmail 설정 유무와 무관하게 텔레그램 전송이 완료된 뒤 종료한다.
+        // tg.sendShutdownNotice() 는 비동기(새 스레드)이므로,
+        // Gmail 미설정 시 즉시 System.exit() 하면 텔레그램 메시지가 취소된다.
+        // → 별도 스레드에서 텔레그램 동기 전송 완료 후 Gmail → exit 순서를 보장한다.
+        new Thread(() -> {
+            // ① 텔레그램 종료 알림 (동기 대기)
+            tg.sendShutdownNoticeSync();
+            // ② Gmail 종료 알림 → 완료(또는 미설정) 후 exit
+            javax.swing.SwingUtilities.invokeLater(() ->
+                gmail.sendShutdownNotice(() -> { AppLogger.close(); System.exit(0); })
+            );
+        }, "ShutdownSequence").start();
 	}
 	
 	private static java.net.URL toUrl(String s) {

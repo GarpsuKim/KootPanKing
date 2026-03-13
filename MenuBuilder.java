@@ -11,7 +11,7 @@ import java.util.Date;
  * 부모 클래스에 대한 직접 의존 없이 JPopupMenu 를 빌드한다.
  */
 public class MenuBuilder {
-    private static final String mainTitle = "■■ 끝판왕 (v1.63)";
+    private static final String mainTitle = "■■ 끝판왕 (v1.64)";
     // ── 호스트(AnalogClockSwing)가 제공해야 하는 콜백 인터페이스 ──
     public interface HostContext {
         // ── 상태 읽기 ─────────────────────────────────────────────
@@ -270,7 +270,7 @@ public class MenuBuilder {
         bgItem.addActionListener(e -> {
             Color c = JColorChooser.showDialog(host.getOwnerComponent(), "배경색",
                     host.getBgColor() != null ? host.getBgColor() : Color.WHITE);
-            if (c != null) { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgImage("", null); host.setBgColor(c); host.saveConfig(); host.repaintClock(); }
+            if (c != null) { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgImage("", null); host.setBgColor(c); host.saveConfig(); host.repaintClock(); }
         });
         JMenuItem bgImageItem = new JMenuItem("이미지 파일 선택...");
         bgImageItem.addActionListener(e -> {
@@ -296,7 +296,7 @@ public class MenuBuilder {
                             java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(f);
                             if (img == null) throw new Exception("이미지를 읽을 수 없습니다.");
                             javax.swing.SwingUtilities.invokeLater(() -> {
-                                host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera();
+                                host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv();
                                 host.setGalaxyMode(false); host.setMatrixMode(false);
                                 host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false);
                                 host.setSparkleMode(false); host.setBubbleMode(false);
@@ -315,21 +315,21 @@ public class MenuBuilder {
             }, "BgImageChooserInit").start();
         });
         JMenuItem bgReset = new JMenuItem("배경색 초기화 (Marble)");
-        bgReset.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgImage("", null); host.setBgColor(null); host.repaintClock(); });
+        bgReset.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgImage("", null); host.setBgColor(null); host.repaintClock(); });
         JMenuItem bgGalaxy = new JMenuItem("Galaxy");
-        bgGalaxy.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.setBgImage("", null); host.setGalaxyMode(true); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgGalaxy.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setGalaxyMode(true); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
         JMenuItem bgMatrix = new JMenuItem("Matrix");
-        bgMatrix.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.setBgImage("", null); host.setMatrixMode(true); host.setGalaxyMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgMatrix.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setMatrixMode(true); host.setGalaxyMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
         JMenuItem bgRain = new JMenuItem("🌧 Rain");
-        bgRain.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.setBgImage("", null); host.setRainMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgRain.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setRainMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
         JMenuItem bgSnow = new JMenuItem("❄️ Snow");
-        bgSnow.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.setBgImage("", null); host.setSnowMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgSnow.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setSnowMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
         JMenuItem bgFire = new JMenuItem("🔥 Fire");
-        bgFire.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.setBgImage("", null); host.setFireMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgFire.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setFireMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
         JMenuItem bgSparkle = new JMenuItem("✨ Sparkle");
-        bgSparkle.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.setBgImage("", null); host.setSparkleMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgSparkle.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setSparkleMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
         JMenuItem bgBubble = new JMenuItem("🫧 Bubble");
-        bgBubble.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.setBgImage("", null); host.setBubbleMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgBubble.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setBubbleMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBgColor(null); host.repaintClock(); });
         // ── 배경색 Show ────────────────────────────────────────
         JMenu showMenu = new JMenu("배경색 Show...");
         for (int v : host.getIntervals()) {
@@ -852,6 +852,7 @@ public class MenuBuilder {
                 url = url.replaceAll("/+$", "") + "/video";
             host.setCameraUrl(url);   // INI에 저장
             host.stopSlideTimer();
+            host.stopItsCctv();
             host.setGalaxyMode(false);
             host.setMatrixMode(false);
             host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false);

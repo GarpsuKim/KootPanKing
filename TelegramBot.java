@@ -171,6 +171,28 @@ public class TelegramBot {
 			}
 		}, "TelegramShutdown").start();
 	}
+
+    /**
+     * 종료 알림 동기 전송 (호출 스레드에서 완료까지 대기).
+     * sendShutdownEmailAndExit() 에서 Gmail 보다 먼저 완료를 보장하기 위해 사용.
+     * 텔레그램 미설정 시 즉시 반환.
+     */
+    public void sendShutdownNoticeSync() {
+        if (!polling || botToken.isEmpty() || myChatId.isEmpty()) return;
+        try {
+            String now    = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date());
+            String pcName = java.net.InetAddress.getLocalHost().getHostName();
+            String userId = System.getProperty("user.name");
+            String msg = "🔴 PC가 종료됩니다.\n\n"
+                + "🕐 종료 시각: " + now + "\n"
+                + "💻 PC 이름 : " + pcName + "\n"
+                + "👤 사용자  : " + userId;
+            send(myChatId, msg);
+            System.out.println("[Telegram] 종료 알림 전송 완료 (sync)");
+        } catch (Exception e) {
+            System.out.println("[Telegram] 종료 알림 전송 실패: " + e.getMessage());
+        }
+    }
     /** 외부 공인 IP 조회 (api.ipify.org 사용) */
     private String getPublicIp() {
         try {

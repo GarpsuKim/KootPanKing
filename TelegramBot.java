@@ -53,6 +53,8 @@ public class TelegramBot {
         String getFirstAlarmTelegramChatId();
 	}
     // ── 설정 필드 (외부에서 직접 읽기/쓰기) ──────────────────────
+    // Google Calendar 서비스 (외부에서 주입)
+    public GoogleCalendarService calendarService = null;
     public String  botToken  = "";  // BotFather 에서 발급받은 Bot Token
     public String  myChatId  = "";  // 허용된 Chat ID (보안) - 비어있으면 전체 허용
     public volatile boolean polling = false; // 폴링 활성화 여부
@@ -240,11 +242,52 @@ public class TelegramBot {
             Pattern uidPat = Pattern.compile("\"update_id\":(\\d+)");
             Pattern cidPat = Pattern.compile("\"chat\":\\{\"id\":(-?\\d+)");
             Pattern txtPat = Pattern.compile("\"text\":\"((?:[^\"\\\\]|\\\\.)*)\"");
-			
+
+            // CallbackQuery 패턴 (인라인 버튼 클릭)
+            Pattern cbPat  = Pattern.compile("\"callback_query\":\\{\"id\":\"([^\"]+)\"");
+            Pattern cbData = Pattern.compile("\"data\":\"([^\"]+)\"");
+            Pattern cbCid  = Pattern.compile("\"callback_query\".*?\"chat\":\\{\"id\":(-?\\d+)");
+
+            // CallbackQuery 처리
+            // ── 이미 처리한 update_id 를 기록 → uidMat 루프에서 중복 처리 방지
+            java.util.Set<Long> callbackUpdateIds = new java.util.HashSet<>();
+            Matcher cbMat = cbPat.matcher(json);
+            while (cbMat.find()) {
+                String queryId = cbMat.group(1);
+                int    bStart  = cbMat.start();
+                String block   = json.substring(bStart);
+
+                Matcher datMat = cbData.matcher(block);
+                Matcher cidCb  = cbCid.matcher(json.substring(bStart));
+                if (!datMat.find() || !cidCb.find()) continue;
+
+                String data   = datMat.group(1);
+                String fromId = cidCb.group(1);
+
+                if (!myChatId.isEmpty() && !fromId.equals(myChatId)) continue;
+
+                // 이 CallbackQuery 가 속한 update_id 추출 → 중복 처리 방지용
+                Matcher uidCb = uidPat.matcher(json.substring(0, cbMat.start() + 1));
+                long cbUpdateId = 0;
+                while (uidCb.find()) cbUpdateId = Long.parseLong(uidCb.group(1));
+                if (cbUpdateId > 0) {
+                    callbackUpdateIds.add(cbUpdateId);
+                    if (cbUpdateId > lastUpdateId) lastUpdateId = cbUpdateId;
+                }
+
+                answerCallbackQuery(queryId); // 로딩 스피너 제거
+                processCallbackData(fromId, data);
+            }
+
             Matcher uidMat = uidPat.matcher(json);
             while (uidMat.find()) {
                 long updateId = Long.parseLong(uidMat.group(1));
                 if (updateId <= lastUpdateId) continue;
+                // CallbackQuery 로 이미 처리한 update → processCommand 재처리 방지
+                if (callbackUpdateIds.contains(updateId)) {
+                    lastUpdateId = updateId;
+                    continue;
+                }
                 lastUpdateId = updateId;
 				
                 // 이 update 블록 범위 계산
@@ -324,6 +367,8 @@ public class TelegramBot {
 				"/d, /down       - PC 종료\n" +
 				"/r, /reboot     - PC 재시작\n" +
 				"/tray           - 시계 창 표시/숨김 토글\n" +
+				"/ms, /mySchedule - 구글 캘린더 일정 조회\n" +
+				"/logout_calendar  - 구글 캘린더 로그아웃\n" +
 				"/cmd < 명령어 , 파일명.bat >  - 명령어 또는 파일명.bat 실행\n" +
 				"/save <파일명>  - PC에 <파일명> 텍스트 파일 생성\n" +
 			"( /save 로 배치파일을 만들 수 있습니다. 파일 내용을 2째 줄부터 입력하세요)" );
@@ -380,6 +425,15 @@ public class TelegramBot {
                 break;
 			}
 			
+            case "/logout_calendar":
+                processLogoutCalendar(chatId);
+                break;
+
+            case "/myschedule":
+            case "/ms":
+                processMySchedule(chatId, text);
+                break;
+
             case "":
             case " ":
 			// 빈 메시지 무시
@@ -390,7 +444,111 @@ public class TelegramBot {
 			break;
 		}  //  switch
 	}  //  processCommand
-	
+
+    /** /logout_calendar 명령 처리 - 구글 캘린더 로그아웃 */
+    private void processLogoutCalendar(String chatId) {
+        if (calendarService == null) {
+            send(chatId, "❌ Google Calendar 서비스가 연결되어 있지 않습니다.");
+            return;
+        }
+        String deletedPath = calendarService.logout();
+        if (deletedPath != null) {
+            send(chatId, "✅ Google Calendar 로그아웃 완료\n"
+                + "🗑 토큰 삭제: " + deletedPath + "\n\n"
+                + "다음 앱 시작 시 브라우저 인증이 다시 진행됩니다.");
+        } else {
+            send(chatId, "✅ Google Calendar 로그아웃 완료\n"
+                + "(저장된 토큰 파일 없음)");
+        }
+    }
+
+    /** /mySchedule 명령 처리 - 인라인 버튼 메뉴 또는 직접 조회 */
+    private void processMySchedule(String chatId, String text) {
+        if (calendarService == null || !calendarService.isInitialized()) {
+            send(chatId, "❌ Google Calendar 연동이 설정되지 않았습니다.");
+            return;
+        }
+        String[] parts = text.trim().split("\\s+");
+        if (parts.length == 1) {
+            sendWithInlineKeyboard(chatId,
+                "📅 일정 조회 방식을 선택하세요:",
+                new String[][]{
+                    {"오늘",     "ms_today"},
+                    {"내일",     "ms_tomorrow"},
+                    {"이번 주",  "ms_week"},
+                    {"이번 달",  "ms_month"},
+                    {"향후 3일", "ms_3"},
+                    {"향후 7일", "ms_7"}
+                });
+            return;
+        }
+        fetchAndSendSchedule(chatId, parts[1].toLowerCase());
+    }
+
+    /** 일정 조회 및 전송 */
+    private void fetchAndSendSchedule(String chatId, String arg) {
+        new Thread(() -> {
+            try {
+                java.util.List<GoogleCalendarService.CalendarEvent> events;
+                String title;
+                switch (arg) {
+                    case "today":
+                    case "오늘":
+                        events = calendarService.getToday();
+                        title  = "오늘 일정 (" + java.time.LocalDate.now()
+                            .format(java.time.format.DateTimeFormatter.ofPattern("M/d")) + ")";
+                        break;
+                    case "tomorrow":
+                    case "내일":
+                        events = calendarService.getNextDays(2).stream()
+                            .filter(e -> e.startTime.toLocalDate()
+                                .equals(java.time.LocalDate.now().plusDays(1)))
+                            .collect(java.util.stream.Collectors.toList());
+                        title  = "내일 일정 (" + java.time.LocalDate.now().plusDays(1)
+                            .format(java.time.format.DateTimeFormatter.ofPattern("M/d")) + ")";
+                        break;
+                    case "week":
+                    case "이번주":
+                        events = calendarService.getThisWeek();
+                        title  = "이번 주 일정";
+                        break;
+                    case "month":
+                    case "이번달":
+                        events = calendarService.getThisMonth();
+                        title  = "이번 달 일정";
+                        break;
+                    default:
+                        try {
+                            int days = Integer.parseInt(arg);
+                            events = calendarService.getNextDays(days);
+                            title  = "향후 " + days + "일 일정";
+                        } catch (NumberFormatException ex) {
+                            send(chatId, "❓ 사용법: /ms [today|tomorrow|week|month|숫자]");
+                            return;
+                        }
+                }
+                send(chatId, GoogleCalendarService.formatEvents(title, events));
+            } catch (Exception e) {
+                send(chatId, "❌ 일정 조회 실패: " + e.getMessage());
+            }
+        }, "ScheduleFetch").start();
+    }
+
+    /** 인라인 버튼 클릭 콜백 처리 */
+    private void processCallbackData(String chatId, String data) {
+        System.out.println("[Telegram Callback] " + chatId + " → " + data);
+        switch (data) {
+            case "ms_today":    fetchAndSendSchedule(chatId, "today");    break;
+            case "ms_tomorrow": fetchAndSendSchedule(chatId, "tomorrow"); break;
+            case "ms_week":     fetchAndSendSchedule(chatId, "week");     break;
+            case "ms_month":    fetchAndSendSchedule(chatId, "month");    break;
+            case "ms_3":        fetchAndSendSchedule(chatId, "3");        break;
+            case "ms_7":        fetchAndSendSchedule(chatId, "7");        break;
+            default:
+                System.out.println("[Telegram Callback] 알 수 없는 콜백: " + data);
+        }
+    }
+
 	private void processCapture(String chatId, int monitor) {
 		
 	    // 모니터 개수 확인 (GraphicsEnvironment 사용)
@@ -599,6 +757,69 @@ public class TelegramBot {
             System.out.println("[Telegram] 발송 오류: " + e.getMessage());
 		}
 	}
+
+    /**
+     * 인라인 키보드 버튼이 포함된 메시지 전송.
+     * buttons: [ ["버튼텍스트1", "callbackData1"], ["버튼텍스트2", "callbackData2"] ... ]
+     * 한 줄에 2개씩 배치됨
+     */
+    public void sendWithInlineKeyboard(String chatId, String text, String[][] buttons) {
+        if (botToken.isEmpty() || chatId.isEmpty()) return;
+        try {
+            StringBuilder kb = new StringBuilder("[");
+            for (int i = 0; i < buttons.length; i += 2) {
+                if (i > 0) kb.append(",");
+                kb.append("[");
+                kb.append("{\"text\":\"").append(buttons[i][0])
+                  .append("\",\"callback_data\":\"").append(buttons[i][1]).append("\"}");
+                if (i + 1 < buttons.length) {
+                    kb.append(",{\"text\":\"").append(buttons[i+1][0])
+                      .append("\",\"callback_data\":\"").append(buttons[i+1][1]).append("\"}");
+                }
+                kb.append("]");
+            }
+            kb.append("]");
+
+            String jsonBody = "{\"chat_id\":\"" + chatId + "\","
+                + "\"text\":\"" + text.replace("\"","\\\"").replace("\n","\\n") + "\","
+                + "\"reply_markup\":{\"inline_keyboard\":" + kb + "}}";
+
+            java.net.URL url = toUrl("https://api.telegram.org/bot" + botToken + "/sendMessage");
+            java.net.HttpURLConnection con = (java.net.HttpURLConnection) url.openConnection();
+            con.setRequestMethod("POST");
+            con.setDoOutput(true);
+            con.setConnectTimeout(10000);
+            con.setReadTimeout(10000);
+            con.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            con.getOutputStream().write(jsonBody.getBytes("UTF-8"));
+            int code = con.getResponseCode();
+            con.disconnect();
+            System.out.println("[Telegram] 인라인 키보드 발송 code=" + code);
+        } catch (Exception e) {
+            System.out.println("[Telegram] 인라인 키보드 발송 오류: " + e.getMessage());
+        }
+    }
+
+    /** 콜백 쿼리에 응답 (버튼 클릭 후 로딩 스피너 제거) */
+    private void answerCallbackQuery(String callbackQueryId) {
+        if (botToken.isEmpty() || callbackQueryId.isEmpty()) return;
+        try {
+            String jsonBody = "{\"callback_query_id\":\"" + callbackQueryId + "\"}";
+            java.net.URL url = toUrl("https://api.telegram.org/bot" + botToken + "/answerCallbackQuery");
+            java.net.HttpURLConnection con = (java.net.HttpURLConnection) url.openConnection();
+            con.setRequestMethod("POST");
+            con.setDoOutput(true);
+            con.setConnectTimeout(5000);
+            con.setReadTimeout(5000);
+            con.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            con.getOutputStream().write(jsonBody.getBytes("UTF-8"));
+            con.getResponseCode();
+            con.disconnect();
+        } catch (Exception e) {
+            System.out.println("[Telegram] answerCallbackQuery 오류: " + e.getMessage());
+        }
+    }
+
     /** 파일(이미지/문서) 전송 */
     public void sendFile(String chatId, File file) throws Exception {
         String name    = file.getName().toLowerCase();

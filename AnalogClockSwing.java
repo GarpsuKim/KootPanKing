@@ -215,6 +215,9 @@ public class AnalogClockSwing extends JFrame {
     AppRestarter       appRestarter;          // 재시작 / AppCDS 관리
     CaptureManager     screenCapture;         // 화면 캡처
     ChimeController    chimeController; // 차임벨
+    // ── Google Calendar ───────────────────────────────────────────
+    GoogleCalendarService calendarService;
+    CalendarAlarmPoller   calendarPoller;
     // ── chime 설정 임시 보관 (loadConfig 시점에 chimeController 가 미생성) ──
     private boolean   pendingChimeEnabled  = false;
     private String    pendingChimeFile     = "";
@@ -490,6 +493,47 @@ public class AnalogClockSwing extends JFrame {
         }
         // 텔레그램 원격제어 폴링 (설정에서 활성화된 경우)
         if (parent == null) tg.startPolling();
+
+        // ── Google Calendar 초기화 (백그라운드) ──────────────────
+        if (parent == null) {
+            new Thread(() -> {
+                calendarService = new GoogleCalendarService();
+                if (calendarService.init()) {
+                    tg.calendarService = calendarService;
+                    calendarPoller = new CalendarAlarmPoller(
+                        calendarService,
+                        tg,
+                        new CalendarAlarmPoller.HostCallback() {
+                            @Override public void playAlarmMedia() {
+                                chimeController.stopChime();
+                                // 알람 미디어 파일이 있으면 chimeController로 재생
+                                // (차임벨 파일을 알람 사운드로 공용 사용)
+                                if (!chimeController.getFile().isEmpty()) {
+                                    new Thread(() -> {
+                                        try {
+                                            String wmplayer = "C:\\Program Files\\Windows Media Player\\wmplayer.exe";
+                                            if (!new java.io.File(wmplayer).exists())
+                                                wmplayer = "C:\\Program Files (x86)\\Windows Media Player\\wmplayer.exe";
+                                            new ProcessBuilder(wmplayer, "/play", "/close",
+                                                chimeController.getFile()).start();
+                                        } catch (Exception ex) {
+                                            System.out.println("[CalAlarm] 미디어 재생 오류: " + ex.getMessage());
+                                        }
+                                    }, "CalAlarmPlay").start();
+                                }
+                            }
+                            @Override public String getTelegramChatId() {
+                                return tg.myChatId;
+                            }
+                            @Override public void prepareMessageBox() {
+                                AnalogClockSwing.this.prepareMessageBox();
+                            }
+                        });
+                    SwingUtilities.invokeLater(() -> calendarPoller.start());
+                    System.out.println("[Main] Google Calendar 연동 완료");
+                }
+            }, "CalendarInit").start();
+        }
         // 기본값: 정각(0분)에 연주 (parent 에서 복사한 경우 덮어쓰지 않음)
         if (parent == null) chimeController.getMinutes()[0] = true;
 		

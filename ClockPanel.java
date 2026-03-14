@@ -216,7 +216,7 @@ class ClockPanel extends JPanel {
             return;
         }
 
-        // ── 카메라 배경 ───────────────────────────────────────────
+        // ── 카메라 배경 (스마트폰) ────────────────────────────────
         if (host.cameraMode && host.cameraFrame != null) {
             Shape oldClip = g2.getClip();
             g2.clip(clip);
@@ -228,9 +228,38 @@ class ClockPanel extends JPanel {
             int ox = cx - radius + (d - sw) / 2;
             int oy = cy - radius + (d - sh) / 2;
             g2.drawImage(cf, ox, oy, sw, sh, null);
-            // 약간 어둡게 오버레이 (시계 바늘 가독성)
-            g2.setColor(new Color(0, 0, 0, 60));
+            // 오버레이 제거 (원본 화면 선명하게)
+            // g2.setColor(new Color(0, 0, 0, 60));
+            // g2.fill(clip);
+            g2.setClip(oldClip);
+            return;
+        }
+
+        // ── 스트림 배경 (YouTube / CCTV) ─────────────────────────
+        if (host.youtubeMode && host.cameraFrame != null) {
+            Shape oldClip = g2.getClip();
+            g2.clip(clip);
+            java.awt.image.BufferedImage cf = host.cameraFrame;
+            int iw = cf.getWidth(), ih = cf.getHeight();
+            int d  = radius * 2;
+
+            // ① 원 전체를 바탕화면 색상으로 채움 (위아래 레터박스)
+            //    읽기 실패 시 검정(0,0,0) 으로 폴백
+            Color letterbox = host.getDesktopColor();
+            g2.setColor(letterbox != null ? letterbox : new Color(0, 0, 0));
             g2.fill(clip);
+
+            // ② 영상은 가로(width) 기준으로 fit → 위아래 빈공간은 녹색 그대로
+            double scale = (double)d / iw;
+            int sw = (int)(iw * scale);
+            int sh = (int)(ih * scale);
+            int ox = cx - radius;                      // 가로: 꽉 채움
+            int oy = cy - radius + (d - sh) / 2;      // 세로: 중앙 정렬
+
+            g2.drawImage(cf, ox, oy, sw, sh, null);
+            // 오버레이 제거 (원본 화면 선명하게)
+            // g2.setColor(new Color(0, 0, 0, 60));
+            // g2.fill(clip);
             g2.setClip(oldClip);
             return;
         }

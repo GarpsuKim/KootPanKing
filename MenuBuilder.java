@@ -133,6 +133,14 @@ public class MenuBuilder {
         String  getCameraUrl();
         void    setCameraUrl(String url);
 
+        // ── YouTube ───────────────────────────────────────────────
+        boolean isYoutubeMode();
+        String  getYoutubeUrl();
+        void    setYoutubeUrl(String url);
+        void    startYoutube(String url);
+        void    stopYoutube();
+        java.awt.Color getDesktopColor();  // Windows 바탕화면 색상
+
         // ── ITS 교통 CCTV ─────────────────────────────────────────
         ItsCctvManager getItsCctv();      // lazy-init 접근
         void    startItsCctv();           // 다른 배경 해제 + 타이머 시작
@@ -270,7 +278,7 @@ public class MenuBuilder {
         bgItem.addActionListener(e -> {
             Color c = JColorChooser.showDialog(host.getOwnerComponent(), "배경색",
                     host.getBgColor() != null ? host.getBgColor() : Color.WHITE);
-            if (c != null) { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgImage("", null); host.setBgColor(c); host.saveConfig(); host.repaintClock(); }
+            if (c != null) { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgImage("", null); host.setBgColor(c); host.saveConfig(); host.repaintClock(); }
         });
         JMenuItem bgImageItem = new JMenuItem("이미지 파일 선택...");
         bgImageItem.addActionListener(e -> {
@@ -296,7 +304,7 @@ public class MenuBuilder {
                             java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(f);
                             if (img == null) throw new Exception("이미지를 읽을 수 없습니다.");
                             javax.swing.SwingUtilities.invokeLater(() -> {
-                                host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv();
+                                host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube();
                                 host.setGalaxyMode(false); host.setMatrixMode(false);
                                 host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false);
                                 host.setSparkleMode(false); host.setBubbleMode(false);
@@ -315,21 +323,21 @@ public class MenuBuilder {
             }, "BgImageChooserInit").start();
         });
         JMenuItem bgReset = new JMenuItem("배경색 초기화 (Marble)");
-        bgReset.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgImage("", null); host.setBgColor(null); host.repaintClock(); });
+        bgReset.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgImage("", null); host.setBgColor(null); host.saveConfig(); host.repaintClock(); });
         JMenuItem bgGalaxy = new JMenuItem("Galaxy");
-        bgGalaxy.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setGalaxyMode(true); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgGalaxy.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setBgImage("", null); host.setGalaxyMode(true); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.saveConfig(); host.repaintClock(); });
         JMenuItem bgMatrix = new JMenuItem("Matrix");
-        bgMatrix.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setMatrixMode(true); host.setGalaxyMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgMatrix.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setBgImage("", null); host.setMatrixMode(true); host.setGalaxyMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.saveConfig(); host.repaintClock(); });
         JMenuItem bgRain = new JMenuItem("🌧 Rain");
-        bgRain.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setRainMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgRain.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setBgImage("", null); host.setRainMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.saveConfig(); host.repaintClock(); });
         JMenuItem bgSnow = new JMenuItem("❄️ Snow");
-        bgSnow.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setSnowMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgSnow.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setBgImage("", null); host.setSnowMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.saveConfig(); host.repaintClock(); });
         JMenuItem bgFire = new JMenuItem("🔥 Fire");
-        bgFire.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setFireMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgFire.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setBgImage("", null); host.setFireMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.saveConfig(); host.repaintClock(); });
         JMenuItem bgSparkle = new JMenuItem("✨ Sparkle");
-        bgSparkle.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setSparkleMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setBubbleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgSparkle.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setBgImage("", null); host.setSparkleMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setBubbleMode(false); host.setBgColor(null); host.saveConfig(); host.repaintClock(); });
         JMenuItem bgBubble = new JMenuItem("🫧 Bubble");
-        bgBubble.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.setBgImage("", null); host.setBubbleMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBgColor(null); host.repaintClock(); });
+        bgBubble.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setBgImage("", null); host.setBubbleMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBgColor(null); host.saveConfig(); host.repaintClock(); });
         // ── 배경색 Show ────────────────────────────────────────
         JMenu showMenu = new JMenu("배경색 Show...");
         for (int v : host.getIntervals()) {
@@ -350,6 +358,7 @@ public class MenuBuilder {
         bgMenu.add(bgBubble);     // 11
         bgMenu.add(showMenu);     // 12
         bgMenu.add(new javax.swing.JSeparator());
+        bgMenu.add(buildYoutubeMenuItem());  // YouTube
         JMenuItem speedGuide = new JMenuItem("⚡ 크기 및 속도 조절");        speedGuide.addActionListener(e -> JOptionPane.showMessageDialog(
             host.getOwnerComponent(),
             "시계 크기와 Galaxy/Matrix의 이동 속도를 조절 할 수 있습니다.\n\n" +
@@ -726,6 +735,7 @@ public class MenuBuilder {
                     slideOnOff.setSelected(false);
                     return;
                 }
+                host.stopCamera(); host.stopItsCctv(); host.stopYoutube();
                 host.startSlideTimer();
             } else {
                 host.stopSlideTimer();
@@ -829,6 +839,204 @@ public class MenuBuilder {
         return globalMenu;
     }
 
+    // ── YouTube 배경 메뉴 ─────────────────────────────────────────
+    private JMenu buildYoutubeMenuItem() {
+        JMenu ytMenu = new JMenu("▶ 스트림 배경 (YouTube/CCTV)");
+
+        // ── 현재 상태 표시 라벨 ───────────────────────────────────
+        JMenuItem statusItem = new JMenuItem(
+            host.isYoutubeMode()
+                ? "● 재생 중: " + truncate(host.getYoutubeUrl(), 40)
+                : "○ 중지됨");
+        statusItem.setEnabled(false);
+        ytMenu.add(statusItem);
+        ytMenu.add(new JSeparator());
+
+        // ── youTubeCctv.ini 목록 직접 나열 ──────────────────────
+        java.util.List<String[]> iniList = loadStreamIni();
+        if (iniList.isEmpty()) {
+            JMenuItem emptyItem = new JMenuItem("(목록 없음 - youTubeCctv.ini 확인)");
+            emptyItem.setEnabled(false);
+            ytMenu.add(emptyItem);
+        } else {
+            for (String[] entry : iniList) {
+                String label = entry[0];
+                String url   = entry[1];
+                JMenuItem item = new JMenuItem(label);
+                item.addActionListener(e -> startStream(url));
+                ytMenu.add(item);
+            }
+        }
+        ytMenu.add(new JSeparator());
+
+        // ── URL 직접 입력 ─────────────────────────────────────────
+        JMenuItem startItem = new JMenuItem("🔗 URL 직접 입력...");
+        startItem.addActionListener(e -> {
+            String prev = host.getYoutubeUrl();
+            String url = (String) JOptionPane.showInputDialog(
+                host.getOwnerComponent(),
+                "스트림 URL 을 입력하세요.\n\n" +
+                "  ▶ YouTube 라이브: https://www.youtube.com/live/XXXX\n" +
+                "  ▶ RTSP CCTV  : rtsp://192.168.0.100:554/stream\n" +
+                "  ▶ MJPEG CCTV : http://192.168.0.100:8080/video\n" +
+                "  ▶ HLS 스트림 : http://example.com/live/stream.m3u8\n\n" +
+                "※ YouTube → yt-dlp.exe 필요\n" +
+                "※ 그 외   → ffmpeg.exe 만으로 직접 캡처",
+                "스트림 배경 설정",
+                JOptionPane.PLAIN_MESSAGE,
+                null, null,
+                prev.isEmpty() ? "https://www.youtube.com/live/" : prev);
+            if (url == null || url.trim().isEmpty()) return;
+            startStream(url.trim());
+        });
+        ytMenu.add(startItem);
+
+        // ── 중지 ──────────────────────────────────────────────────
+        JMenuItem stopItem = new JMenuItem("⏹ 중지");
+        stopItem.setEnabled(host.isYoutubeMode());
+        stopItem.addActionListener(e -> {
+            host.stopYoutube();
+            host.saveConfig();
+            host.repaintClock();
+        });
+        ytMenu.add(stopItem);
+
+        ytMenu.add(new JSeparator());
+
+        // ── 안내 ──────────────────────────────────────────────────
+        JMenuItem guideItem = new JMenuItem("❓ 사용 방법 안내");
+        guideItem.addActionListener(e -> JOptionPane.showMessageDialog(
+            host.getOwnerComponent(),
+            "【 스트림 배경 사용 방법 】\n\n" +
+            "■ youTubeCctv.ini 즐겨찾기\n" +
+            "  프로그램 실행 폴더에 youTubeCctv.ini 파일 생성:\n" +
+            "  [이름]URL 형식으로 한 줄씩 입력\n" +
+            "  예) [시드니]https://www.youtube.com/live/XXXX\n\n" +
+            "■ YouTube (yt-dlp.exe + ffmpeg.exe 필요)\n" +
+            "  • yt-dlp.exe  → https://github.com/yt-dlp/yt-dlp/releases\n" +
+            "  • ffmpeg.exe  → https://www.gyan.dev/ffmpeg/builds/\n\n" +
+            "■ CCTV / 인터넷 스트림 (ffmpeg.exe 만 필요)\n" +
+            "  • RTSP  : rtsp://아이피:554/stream\n" +
+            "  • MJPEG : http://아이피:8080/video\n" +
+            "  • HLS   : http://example.com/live/stream.m3u8\n\n" +
+            "■ 공통\n" +
+            "  • 5초마다 1컷 캡처, 원본 해상도 유지\n" +
+            "  • URL 변경 시 이전 스트림 자동 중지\n\n" +
+            "※ YouTube 이용약관을 준수하여 사용하세요.",
+            "스트림 배경 안내", JOptionPane.INFORMATION_MESSAGE));
+        ytMenu.add(guideItem);
+
+        return ytMenu;
+    }
+
+    /** 배경 모드 전부 해제 후 스트림 시작 공통 메서드 */
+    private void startStream(String url) {
+        host.stopSlideTimer(); host.stopShowTimer();
+        host.stopCamera();     host.stopItsCctv();
+        host.stopYoutube();
+        host.setGalaxyMode(false); host.setMatrixMode(false);
+        host.setRainMode(false);   host.setSnowMode(false);
+        host.setFireMode(false);   host.setSparkleMode(false);
+        host.setBubbleMode(false); host.setBgImage("", null);
+        host.setBgColor(null);
+        host.setYoutubeUrl(url);
+        host.startYoutube(url);
+        host.saveConfig();
+    }
+
+    /**
+     * youTubeCctv.ini 파싱.
+     * 형식: [이름]URL  (한 줄에 하나)
+     * 파일 없으면 GitHub 에서 youTubeCctv_default.ini 다운로드 후 생성.
+     * 반환: { {"이름", "URL"}, ... }
+     */
+    private java.util.List<String[]> loadStreamIni() {
+        java.util.List<String[]> list = new java.util.ArrayList<>();
+
+        // 실행 폴더 기준으로 탐색
+        java.io.File iniFile = null;
+        try {
+            java.security.CodeSource cs =
+                MenuBuilder.class.getProtectionDomain().getCodeSource();
+            if (cs != null) {
+                java.io.File jarDir = new java.io.File(cs.getLocation().toURI()).getParentFile();
+                iniFile = new java.io.File(jarDir, "youTubeCctv.ini");
+            }
+        } catch (Exception ignored) {}
+
+        if (iniFile == null || !iniFile.exists())
+            iniFile = new java.io.File("youTubeCctv.ini");
+
+        // 파일 없으면 GitHub 에서 다운로드
+        if (!iniFile.exists()) {
+            System.out.println("[StreamIni] 파일 없음 → GitHub 다운로드 시도");
+            downloadStreamIni(iniFile);
+        }
+
+        if (!iniFile.exists()) {
+            System.out.println("[StreamIni] 다운로드 실패 — 목록 없음");
+            return list;
+        }
+
+        try (java.io.BufferedReader br = new java.io.BufferedReader(
+                new java.io.InputStreamReader(
+                new java.io.FileInputStream(iniFile), "UTF-8"))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty() || line.startsWith("#")) continue;
+                if (line.startsWith("[")) {
+                    int close = line.indexOf(']');
+                    if (close > 1) {
+                        String name = line.substring(1, close).trim();
+                        String url  = line.substring(close + 1).trim();
+                        if (!name.isEmpty() && !url.isEmpty())
+                            list.add(new String[]{name, url});
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("[StreamIni] 읽기 오류: " + e.getMessage());
+        }
+        System.out.println("[StreamIni] " + list.size() + "개 로드됨");
+        return list;
+    }
+
+    /** youTubeCctv_default.ini 를 GitHub 에서 다운로드하여 destFile 로 저장 */
+    private void downloadStreamIni(java.io.File destFile) {
+        final String DEFAULT_URL =
+            "https://raw.githubusercontent.com/GarpsuKim/KootPanKing/refs/heads/main/youTubeCctv_default.ini";
+        System.out.println("[StreamIni] 다운로드 시도: " + DEFAULT_URL);
+        try {
+            java.net.URL url = new java.net.URI(DEFAULT_URL).toURL();
+            java.net.HttpURLConnection con = (java.net.HttpURLConnection) url.openConnection();
+            con.setConnectTimeout(5000);
+            con.setReadTimeout(5000);
+            con.connect();
+            if (con.getResponseCode() != 200) {
+                System.out.println("[StreamIni] 다운로드 실패 (HTTP " + con.getResponseCode() + ")");
+                con.disconnect();
+                return;
+            }
+            try (java.io.InputStream in  = con.getInputStream();
+                 java.io.FileOutputStream out = new java.io.FileOutputStream(destFile)) {
+                byte[] buf = new byte[4096];
+                int n;
+                while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+            }
+            con.disconnect();
+            System.out.println("[StreamIni] 다운로드 완료: " + destFile.getAbsolutePath());
+        } catch (Exception e) {
+            System.out.println("[StreamIni] 다운로드 오류: " + e.getMessage());
+        }
+    }
+
+    /** 문자열이 maxLen 보다 길면 뒤를 ... 으로 자름 */
+    private String truncate(String s, int maxLen) {
+        if (s == null) return "";
+        return s.length() <= maxLen ? s : s.substring(0, maxLen - 3) + "...";
+    }
+
     // ── 카카오톡 서브메뉴 ─────────────────────────────────────────
     // ── 스마트폰 카메라 메뉴 ─────────────────────────────────────
     private JMenu buildCameraMenuItem() {
@@ -853,6 +1061,7 @@ public class MenuBuilder {
             host.setCameraUrl(url);   // INI에 저장
             host.stopSlideTimer();
             host.stopItsCctv();
+            host.stopYoutube();
             host.setGalaxyMode(false);
             host.setMatrixMode(false);
             host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false);
@@ -1624,6 +1833,14 @@ public class MenuBuilder {
         @Override public void    captureCamera()          { app.captureCamera(); }
         @Override public String  getCameraUrl()           { return app.cameraUrl; }
         @Override public void    setCameraUrl(String url) { app.cameraUrl = url; }
+
+        // ── YouTube ──────────────────────────────────────────────
+        @Override public boolean isYoutubeMode()            { return app.youtubeMode; }
+        @Override public String  getYoutubeUrl()            { return app.youtubeUrl != null ? app.youtubeUrl : ""; }
+        @Override public void    setYoutubeUrl(String url)  { app.youtubeUrl = url; }
+        @Override public void    startYoutube(String url)   { app.startYoutube(url); }
+        @Override public void    stopYoutube()              { app.stopYoutube(); }
+        @Override public java.awt.Color getDesktopColor()  { return app.getDesktopColor(); }
 
         // ── ITS 교통 CCTV ────────────────────────────────────────
         @Override public ItsCctvManager getItsCctv()  { return app.getItsCctv(); }

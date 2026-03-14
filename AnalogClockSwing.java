@@ -93,6 +93,12 @@ public class AnalogClockSwing extends JFrame {
     java.awt.image.BufferedImage cameraFrame = null; // 최신 프레임
     String           cameraUrl  = "http://192.168.0.100:8080/video"; // 마지막 사용 URL
 
+    // ── YouTube Background ────────────────────────────────────────
+    boolean          youtubeMode   = false;
+    String           youtubeUrl    = "";          // 사용자 입력 YouTube URL
+    Thread           youtubeThread = null;        // 프레임 읽기 스레드
+    volatile boolean youtubeRunning = false;      // 스레드 중지 플래그
+
     // ── ITS 교통 CCTV ─────────────────────────────────────────────
     ItsCctvManager   itsCctv    = null;
     // ── Slideshow ─────────────────────────────────────────────────
@@ -209,6 +215,11 @@ public class AnalogClockSwing extends JFrame {
     AppRestarter       appRestarter;          // 재시작 / AppCDS 관리
     CaptureManager     screenCapture;         // 화면 캡처
     ChimeController    chimeController; // 차임벨
+    // ── chime 설정 임시 보관 (loadConfig 시점에 chimeController 가 미생성) ──
+    private boolean   pendingChimeEnabled  = false;
+    private String    pendingChimeFile     = "";
+    private boolean   pendingChimeFull     = false;
+    private boolean[] pendingChimeMinutes  = null;
 	
     // ── 공용 Random (매번 new 생성 방지) ─────────────────────────
     private final Random rnd = new Random();
@@ -294,6 +305,7 @@ public class AnalogClockSwing extends JFrame {
             @Override public void prepareMessageBox()         { AnalogClockSwing.this.prepareMessageBox(); }
             @Override public void prepareDialog(java.awt.Window w) { AnalogClockSwing.this.prepareDialog(w); }
 		});
+        applyChimeConfig(); // loadConfig() 에서 임시 보관한 chime 설정 적용
         // AlarmController 초기화
         alarmController = new AlarmController(
             this, APP_DIR + "alarms.dat",
@@ -922,6 +934,202 @@ public class AnalogClockSwing extends JFrame {
         clockPanel.repaint();
 	}
 
+    // ── YouTube Background ────────────────────────────────────────
+
+    /**
+     * yt-dlp 로 실제 스트림 URL 추출 → ffmpeg 파이프로 프레임 읽기.
+     * yt-dlp.exe / ffmpeg.exe 는 실행 폴더(APP_DIR) 또는 PATH 에 있어야 함.
+     * YouTube URL → yt-dlp 로 실제 스트림 URL 추출 후 ffmpeg 캡처
+     * 그 외 직접 URL (RTSP, MJPEG, HLS, 일반 HTTP 스트림 등) → ffmpeg 직접 캡처
+     */
+    void startYoutube(String ytUrl) {
+        // URL 이 바뀐 경우 기존 스트림 완전 중단 후 재시작
+        if (youtubeRunning && !ytUrl.equals(youtubeUrl)) {
+            System.out.println("[Stream] URL 변경 → 기존 스트림 중단");
+            youtubeRunning = false;
+            if (youtubeThread != null) { youtubeThread.interrupt(); youtubeThread = null; }
+        }
+        stopYoutube();
+        youtubeUrl     = ytUrl;
+        youtubeMode    = true;
+        youtubeRunning = true;
+
+        youtubeThread = new Thread(() -> {
+            while (youtubeRunning) {
+                try {
+                    // ── ① URL 종류 판별 ──────────────────────────────────
+                    // YouTube 여부: youtube.com / youtu.be 도메인
+                    boolean isYoutube = youtubeUrl.contains("youtube.com")
+                                     || youtubeUrl.contains("youtu.be");
+
+                    String streamUrl;
+                    if (isYoutube) {
+                        // ── YouTube: yt-dlp 로 실제 스트림 URL 추출 ──────
+                        String ytdlpPath = resolveExe("yt-dlp.exe");
+                        ProcessBuilder ytPb = new ProcessBuilder(
+                            ytdlpPath,
+                            "-f", "bestvideo[ext=mp4]/bestvideo/best",
+                            "--get-url",
+                            "--no-playlist",
+                            youtubeUrl
+                        );
+                        ytPb.redirectErrorStream(true);
+                        Process ytProc = ytPb.start();
+                        java.io.BufferedReader ytReader = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(ytProc.getInputStream(), "UTF-8"));
+                        streamUrl = "";
+                        String line;
+                        while ((line = ytReader.readLine()) != null) {
+                            line = line.trim();
+                            if (line.startsWith("http")) { streamUrl = line; break; }
+                        }
+                        ytProc.waitFor();
+                        if (streamUrl.isEmpty() || !youtubeRunning) {
+                            System.out.println("[Stream] YouTube 스트림 URL 추출 실패");
+                            break;
+                        }
+                        System.out.println("[Stream] YouTube 스트림 URL 추출 성공");
+                    } else {
+                        // ── 직접 URL: RTSP / MJPEG / HLS / HTTP 스트림 등
+                        // yt-dlp 없이 ffmpeg 에 직접 URL 전달
+                        streamUrl = youtubeUrl;
+                        System.out.println("[Stream] 직접 URL 사용: " + streamUrl);
+                    }
+
+                    // ── ② 5초마다 jpg 1장씩 캡처 ────────────────────────
+                    String ffmpegPath = resolveExe("ffmpeg.exe");
+                    final String thisUrl = youtubeUrl;
+                    long startMs = System.currentTimeMillis();
+                    long maxMs   = 6L * 3600 * 1000;
+                    long seekSec = 0; // 매 캡처마다 seek 위치 이동 (라이브는 0 고정)
+
+                    while (youtubeRunning) {
+                        // URL 변경 감지
+                        if (!thisUrl.equals(youtubeUrl)) {
+                            System.out.println("[Stream] URL 변경 → 재시작");
+                            break;
+                        }
+                        // 6시간 후 yt-dlp 재추출
+                        if (System.currentTimeMillis() - startMs > maxMs) {
+                            System.out.println("[Stream] URL 만료 → 재추출");
+                            break;
+                        }
+
+                        try {
+                            // ffmpeg: 스트림에서 jpg 1장을 stdout으로 출력
+                            // -vf "scale=iw:ih:flags=lanczos" → 원본 해상도 유지, lanczos 고품질
+                            // -q:v 1 → jpg 최고 품질 (1=최고, 31=최저)
+                            // -frames:v 1 → 딱 1프레임만
+                            ProcessBuilder capPb = new ProcessBuilder(
+                                ffmpegPath,
+                                "-reconnect",          "1",
+                                "-reconnect_streamed",  "1",
+                                "-reconnect_delay_max", "5",
+                                "-i",                  streamUrl,
+                                "-frames:v",           "1",
+                                "-vf",                 "scale=iw:ih:flags=lanczos",
+                                "-q:v",                "1",
+                                "-f",                  "image2",
+                                "-vcodec",             "mjpeg",
+                                "pipe:1"
+                            );
+                            capPb.redirectErrorStream(false);
+                            Process capProc = capPb.start();
+                            // stderr 버림
+                            new Thread(() -> {
+                                try { capProc.getErrorStream().transferTo(java.io.OutputStream.nullOutputStream()); }
+                                catch (Exception ignored) {}
+                            }, "YT-cap-stderr").start();
+
+                            // stdout → jpg 바이트 읽기 → BufferedImage
+                            byte[] jpgBytes = capProc.getInputStream().readAllBytes();
+                            capProc.waitFor();
+
+                            if (jpgBytes.length > 0) {
+                                java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(jpgBytes);
+                                java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(bais);
+                                if (img != null) {
+                                    cameraFrame = img;
+                                    javax.swing.SwingUtilities.invokeLater(() -> clockPanel.repaint());
+                                    System.out.println("[Stream] 캡처 완료 " + img.getWidth() + "x" + img.getHeight());
+                                }
+                            }
+                        } catch (Exception capEx) {
+                            System.out.println("[Stream] 캡처 오류: " + capEx.getMessage());
+                        }
+
+                        // 5초 대기
+                        try { Thread.sleep(5000); } catch (InterruptedException ie) { break; }
+                    }
+
+                } catch (Exception ex) {
+                    System.out.println("[Stream] 오류: " + ex.getMessage());
+                    if (!youtubeRunning) break;
+                    try { Thread.sleep(3000); } catch (InterruptedException ignored) {}
+                }
+            }
+            System.out.println("[Stream] 스레드 종료");
+        }, "YouTube-BG");
+        youtubeThread.setDaemon(true);
+        youtubeThread.start();
+    }
+
+    void stopYoutube() {
+        youtubeRunning = false;
+        if (youtubeThread != null) {
+            youtubeThread.interrupt();
+            youtubeThread = null;
+        }
+        youtubeMode = false;
+        cameraFrame = null;
+        if (clockPanel != null) clockPanel.repaint();
+    }
+
+    /** 실행 파일 경로 탐색: APP_DIR → PATH */
+    private String resolveExe(String exeName) {
+        File f = new File(APP_DIR, exeName);
+        if (f.exists()) return f.getAbsolutePath();
+        String path = System.getenv("PATH");
+        if (path != null) {
+            for (String dir : path.split(File.pathSeparator)) {
+                File candidate = new File(dir, exeName);
+                if (candidate.exists()) return candidate.getAbsolutePath();
+            }
+        }
+        return exeName;
+    }
+
+    /**
+     * Windows 바탕화면 단색 배경색 반환.
+     * HKCU\Control Panel\Colors\Background → "R G B" 문자열 파싱.
+     * 읽기 실패 시 null 반환 → ClockPanel 에서 기본색 사용.
+     */
+    Color getDesktopColor() {
+        try {
+            Process p = Runtime.getRuntime().exec(
+                new String[]{"reg", "query",
+                    "HKCU\\Control Panel\\Colors", "/v", "Background"});
+            java.io.BufferedReader br = new java.io.BufferedReader(
+                new java.io.InputStreamReader(p.getInputStream(), "UTF-8"));
+            String line;
+            while ((line = br.readLine()) != null) {
+                // 형식: Background    REG_SZ    R G B
+                java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("(\\d+)\\s+(\\d+)\\s+(\\d+)$").matcher(line.trim());
+                if (m.find()) {
+                    return new Color(
+                        Integer.parseInt(m.group(1)),
+                        Integer.parseInt(m.group(2)),
+                        Integer.parseInt(m.group(3)));
+                }
+            }
+            p.waitFor();
+        } catch (Exception e) {
+            System.out.println("[DesktopColor] 읽기 실패: " + e.getMessage());
+        }
+        return null;
+    }
+
     // ── ITS 교통 CCTV ─────────────────────────────────────────────
 
     ItsCctvManager getItsCctv() {
@@ -939,7 +1147,7 @@ public class AnalogClockSwing extends JFrame {
 
     void startItsCctv() {
         // 다른 배경 모드 해제
-        stopCamera(); stopSlideTimer(); stopShowTimer();
+        stopCamera(); stopSlideTimer(); stopShowTimer(); stopYoutube();
         galaxyMode = false; matrixMode = false; rainMode = false;
         snowMode   = false; fireMode   = false; sparkleMode = false;
         bubbleMode = false; bgColor    = null;
@@ -982,25 +1190,24 @@ public class AnalogClockSwing extends JFrame {
 	
     void startShowTimer() {
         if (showTimer != null) showTimer.stop();
-        // galaxy / matrix / camera 가 켜져 있으면 bgColor 가 무시되므로 자동 해제
-        galaxyMode = false;
-        matrixMode = false;
-        rainMode = false; snowMode = false; fireMode = false;
-        sparkleMode = false; bubbleMode = false;
-        stopCamera();
-        stopItsCctv();
-        stopSlideTimer();
         if (showInterval > 0) {
+            // 배경색 Show 를 실제로 시작할 때만 다른 배경 모드를 해제한다.
+            // showInterval == 0(미사용) 상태에서는 기존 배경 모드를 건드리지 않는다.
+            galaxyMode = false;
+            matrixMode = false;
+            rainMode = false; snowMode = false; fireMode = false;
+            sparkleMode = false; bubbleMode = false;
+            stopCamera();
+            stopItsCctv();
+            stopSlideTimer();
             showTimer = new Timer(showInterval * 1000, e -> {
                 bgColor = new Color(rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256));
                 clockPanel.repaint();
-			});
+            });
             showTimer.start();
-			} else {
-            bgColor = null;
-            clockPanel.repaint();
-		}
-	}
+        }
+        // showInterval == 0 이면 아무것도 하지 않음 — 기존 배경 모드 유지
+    }
 	
     // 현재 창이 위치한 모니터의 GraphicsConfiguration 반환
     private GraphicsConfiguration getCurrentScreenGC() {
@@ -1454,19 +1661,22 @@ public class AnalogClockSwing extends JFrame {
             borderWidth = Integer.parseInt(config.getProperty("borderWidth","-1"));
             borderAlpha = Integer.parseInt(config.getProperty("borderAlpha","255"));
             borderVisible = Boolean.parseBoolean(config.getProperty("borderVisible","true"));
-            // Chime
-            chimeController.setEnabled(Boolean.parseBoolean(config.getProperty("chimeEnabled","false")));
-            chimeController.setFile(config.getProperty("chimeFile",""));
-            chimeController.setFull(Boolean.parseBoolean(config.getProperty("chimeFull","false")));
-            String mins  = config.getProperty("chimeMinutes","0");
+        } catch (Exception ignored) {}
+        // ── Chime: loadConfig() 호출 시점에 chimeController 가 null 이므로
+        //    별도 try 블록으로 분리. applyChimeConfig() 에서 생성 후 적용.
+        try {
+            pendingChimeEnabled = Boolean.parseBoolean(config.getProperty("chimeEnabled","false"));
+            pendingChimeFile    = config.getProperty("chimeFile","");
+            pendingChimeFull    = Boolean.parseBoolean(config.getProperty("chimeFull","false"));
+            String mins = config.getProperty("chimeMinutes","0");
             boolean[] loadedMins = new boolean[60];
             for (String m : mins.split(",")) {
                 try { int idx = Integer.parseInt(m.trim());
-					if (idx>=0 && idx<60) loadedMins[idx]=true;
-				} catch (Exception ignored2) {}
-			}
-            chimeController.setMinutes(loadedMins);
-		} catch (Exception ignored) {}
+                    if (idx >= 0 && idx < 60) loadedMins[idx] = true;
+                } catch (Exception ignored2) {}
+            }
+            pendingChimeMinutes = loadedMins;
+        } catch (Exception ignored) {}
         // ── 인증 정보 / 경로 캐시: 앞쪽 파싱 예외와 무관하게 항상 읽는다 ──
         try {
             gmail.from   = config.getProperty("gmail.from",   "");
@@ -1500,9 +1710,16 @@ public class AnalogClockSwing extends JFrame {
             rainMode    = Boolean.parseBoolean(config.getProperty("rainMode",    "false"));
             snowMode    = Boolean.parseBoolean(config.getProperty("snowMode",    "false"));
             fireMode    = Boolean.parseBoolean(config.getProperty("fireMode",    "false"));
-            
             sparkleMode = Boolean.parseBoolean(config.getProperty("sparkleMode", "false"));
             bubbleMode  = Boolean.parseBoolean(config.getProperty("bubbleMode",  "false"));
+            // ── 애니메이션 배경 모드가 켜져 있으면 bgImage 우선순위 충돌 방지 ──
+            // drawFace() 에서 bgImageCache != null 조건이 galaxy/matrix/rain 등보다
+            // 먼저 체크되므로, 이미지 배경 캐시를 비워야 애니메이션 배경이 표시된다.
+            if (galaxyMode || matrixMode || rainMode || snowMode
+                    || fireMode || sparkleMode || bubbleMode) {
+                bgImagePath  = "";
+                bgImageCache = null;
+            }
             // cameraMode 복원은 initUI 완료 후 startCamera 호출이 필요하므로 플래그만 저장
             if (Boolean.parseBoolean(config.getProperty("cameraMode", "false"))
 				&& !cameraUrl.isEmpty()) {
@@ -1514,6 +1731,15 @@ public class AnalogClockSwing extends JFrame {
                     clockPanel.repaint();
 				});
 			}
+            // youtubeMode 복원
+            youtubeUrl = config.getProperty("youtubeUrl", "");
+            if (Boolean.parseBoolean(config.getProperty("youtubeMode", "false"))
+                    && !youtubeUrl.isEmpty()) {
+                final String ytUrlToRestore = youtubeUrl;
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    startYoutube(ytUrlToRestore);
+                });
+            }
 		} catch (Exception ignored) {}
 	}
 	
@@ -1546,6 +1772,17 @@ public class AnalogClockSwing extends JFrame {
 		}
 	}
 	
+    /** loadConfig() 에서 임시 보관한 chime 설정을 chimeController 생성 후 적용 */
+    private void applyChimeConfig() {
+        if (chimeController == null) return;
+        chimeController.setEnabled(pendingChimeEnabled);
+        chimeController.setFile(pendingChimeFile);
+        chimeController.setFull(pendingChimeFull);
+        if (pendingChimeMinutes != null) {
+            chimeController.setMinutes(pendingChimeMinutes);
+        }
+    }
+
     void saveConfig() {
         config.setProperty("alwaysOnTop",  String.valueOf(alwaysOnTop));
         config.setProperty("startHidden",  String.valueOf(!isVisible())); // 숨김 상태로 종료했으면 true
@@ -1607,6 +1844,8 @@ public class AnalogClockSwing extends JFrame {
         config.setProperty("sparkleMode", String.valueOf(sparkleMode));
         config.setProperty("bubbleMode",  String.valueOf(bubbleMode));
         config.setProperty("cameraMode",  String.valueOf(cameraMode && camera != null && camera.isRunning()));
+        config.setProperty("youtubeMode", String.valueOf(youtubeMode));
+        config.setProperty("youtubeUrl",  youtubeUrl != null ? youtubeUrl : "");
         // config.setProperty("kakaoAccessToken",  kakaoAccessToken);
         // config.setProperty("kakaoRefreshToken", kakaoRefreshToken);
         // Border

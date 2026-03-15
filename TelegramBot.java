@@ -1,4 +1,3 @@
-
 import javax.swing.*;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -475,10 +474,10 @@ public class TelegramBot {
                 new String[][]{
                     {"오늘",     "ms_today"},
                     {"내일",     "ms_tomorrow"},
-                    {"이번 주",  "ms_week"},
-                    {"이번 달",  "ms_month"},
                     {"향후 3일", "ms_3"},
-                    {"향후 7일", "ms_7"}
+                    {"향후 7일", "ms_7"},
+                    {"지난 7일", "ms_week"},
+                    {"이번 달",  "ms_month"}
                 });
             return;
         }

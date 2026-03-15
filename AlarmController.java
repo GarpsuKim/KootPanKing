@@ -97,6 +97,12 @@ public class AlarmController {
         void    saveConfig();
         void    showNtfyQrDialog(java.awt.Window parent, String url, String topic);
         void    showPushoverQrDialog(java.awt.Window parent);
+        /** 무지개 배경 - 지정 색으로 교체 + 리페인트 (CalendarAlarmPoller 와 동일 패턴) */
+        void    setBgColorAndRepaint(java.awt.Color c);
+        /** 무지개 배경 - 원래 배경 복원 */
+        void    restoreBgColor();
+        /** 무지개 지속 시간 (초) — INI rainbowSeconds, 기본 30 */
+        int     getRainbowSeconds();
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -117,6 +123,7 @@ public class AlarmController {
 
     private List<AlarmEntry> alarmList       = new ArrayList<>();
     private int              lastAlarmMinute = -1;
+    private javax.swing.Timer checkTimer     = null;
 
     // ═══════════════════════════════════════════════════════════
     //  생성자
@@ -170,6 +177,13 @@ public class AlarmController {
     //  알람 체크 (매 초 — AnalogClockSwing.chimeCheckTimer 에서 호출)
     // ═══════════════════════════════════════════════════════════
 
+    /** 매 초 알람 체크 타이머 시작 (initUI 완료 후 1회 호출) */
+    public void startCheckTimer() {
+        if (checkTimer != null) checkTimer.stop();
+        checkTimer = new javax.swing.Timer(1000, e -> checkAlarms());
+        checkTimer.start();
+    }
+
     public void checkAlarms() {
         ZonedDateTime now = ZonedDateTime.now(host.getTimeZone());
         int h   = now.getHour();
@@ -214,13 +228,75 @@ public class AlarmController {
                 new ProcessBuilder(cmd).start();
             } catch (Exception ignored) {}
         }
-        // ② 팝업
+        // ② 텍스트박스 + 확인 버튼 팝업 + 무지개 배경 (EDT에서 실행)
         final String msg = a.label.isEmpty() ? "알람!" : a.label;
+        final String content = String.format("⏰  %02d:%02d\n\n%s", a.hour, a.minute, msg);
         SwingUtilities.invokeLater(() -> {
-            host.prepareMessageBox();
-            JOptionPane.showMessageDialog(null,
-                String.format("⏰  %02d:%02d\n\n%s", a.hour, a.minute, msg),
-                "알람", JOptionPane.INFORMATION_MESSAGE);
+            if (host != null) host.prepareMessageBox();
+
+            javax.swing.JDialog dlg = new javax.swing.JDialog(
+                (java.awt.Frame) null, "알람", false);
+            dlg.setLayout(new java.awt.BorderLayout(8, 8));
+            dlg.getRootPane().setBorder(
+                javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+            javax.swing.JTextArea ta = new javax.swing.JTextArea(content, 6, 30);
+            ta.setEditable(false);
+            ta.setFont(new java.awt.Font("Malgun Gothic", java.awt.Font.PLAIN, 14));
+            ta.setLineWrap(true);
+            ta.setWrapStyleWord(true);
+            dlg.add(new javax.swing.JScrollPane(ta), java.awt.BorderLayout.CENTER);
+
+            // ── 무지개 배경 타이머 (7색 순환, getRainbowSeconds()초 후 자동 복귀) ──
+            final java.awt.Color[] RAINBOW = {
+                new java.awt.Color(255,  0,  0),   // 빨
+                new java.awt.Color(255,127,  0),   // 주
+                new java.awt.Color(255,255,  0),   // 노
+                new java.awt.Color(  0,200,  0),   // 초
+                new java.awt.Color(  0,  0,255),   // 파
+                new java.awt.Color( 75,  0,130),   // 남
+                new java.awt.Color(148,  0,211),   // 보
+            };
+            final int totalSecs = Math.max(1, host.getRainbowSeconds());
+            final int[] colorIdx = {0};
+            final javax.swing.Timer[] rainbowTimer = {null};
+            if (host != null) {
+                rainbowTimer[0] = new javax.swing.Timer(1000, ev -> {
+                    if (colorIdx[0] < totalSecs) {
+                        host.setBgColorAndRepaint(RAINBOW[colorIdx[0] % RAINBOW.length]);
+                        colorIdx[0]++;
+                    } else {
+                        // 완료 → 타이머 중지 + 원래 배경 복원
+                        rainbowTimer[0].stop();
+                        host.restoreBgColor();
+                    }
+                });
+                rainbowTimer[0].start();
+            }
+
+            javax.swing.JButton okBtn = new javax.swing.JButton("  확인  ");
+            okBtn.addActionListener(ev -> dlg.dispose());
+            // 다이얼로그 닫힐 때 타이머 중지 + 복원 (X 버튼 등)
+            dlg.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override public void windowClosed(java.awt.event.WindowEvent e) {
+                    if (rainbowTimer[0] != null) rainbowTimer[0].stop();
+                    if (host != null) host.restoreBgColor();
+                }
+            });
+            javax.swing.JPanel btnPanel = new javax.swing.JPanel(
+                new java.awt.FlowLayout(java.awt.FlowLayout.CENTER));
+            btnPanel.add(okBtn);
+            dlg.add(btnPanel, java.awt.BorderLayout.SOUTH);
+
+            dlg.setAlwaysOnTop(true);
+            dlg.pack();
+            // 화면 중앙 배치
+            java.awt.Dimension screen =
+                java.awt.Toolkit.getDefaultToolkit().getScreenSize();
+            dlg.setLocation(
+                (screen.width  - dlg.getWidth())  / 2,
+                (screen.height - dlg.getHeight()) / 2);
+            dlg.setVisible(true);
         });
         // ③ 스마트폰 push
         if (a.usePush && !a.pushToken.isEmpty())

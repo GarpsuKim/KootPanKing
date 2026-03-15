@@ -45,12 +45,19 @@ public class ChimeController {
         void prepareMessageBox();
         /** JDialog 위치 조정 및 pack */
         void prepareDialog(java.awt.Window dlg);
+        /** 무지개 배경 - 지정 색으로 교체 + 리페인트 (AlarmController 와 동일 패턴) */
+        void setBgColorAndRepaint(java.awt.Color c);
+        /** 무지개 배경 - 원래 배경 복원 */
+        void restoreBgColor();
+        /** 무지개 지속 시간 (초) — INI rainbowSeconds, 기본 30 */
+        int getRainbowSeconds();
     }
 
     // ── 설정 필드 ────────────────────────────────────────────
     private boolean   enabled  = false;
     private String    file     = "";           // 오디오/비디오 파일 경로
-    private boolean   full     = false;        // false=처음15초, true=끝까지
+    /** 연주 시간: 0=처음15초, 1=처음30초, 2=끝까지 */
+    private int       duration = 0;
     private boolean[] minutes  = new boolean[60]; // 0~59분 체크
 
     // ── 내부 상태 ────────────────────────────────────────────
@@ -73,12 +80,20 @@ public class ChimeController {
 
     public boolean   isEnabled()  { return enabled; }
     public String    getFile()    { return file; }
-    public boolean   isFull()     { return full; }
+    /** 연주 시간: 0=처음15초, 1=처음30초, 2=끝까지 */
+    public int       getDuration() { return duration; }
+    /** @deprecated isFull() 대신 getDuration()==2 사용 권장 */
+    @Deprecated
+    public boolean   isFull()     { return duration == 2; }
     public boolean[] getMinutes() { return minutes; }
 
-    public void setEnabled(boolean v) { this.enabled = v; }
-    public void setFile(String v)     { this.file    = v != null ? v : ""; }
-    public void setFull(boolean v)    { this.full    = v; }
+    public void setEnabled(boolean v)  { this.enabled  = v; }
+    public void setFile(String v)      { this.file     = v != null ? v : ""; }
+    /** 연주 시간 설정: 0=처음15초, 1=처음30초, 2=끝까지 */
+    public void setDuration(int v)     { this.duration = (v >= 0 && v <= 2) ? v : 0; }
+    /** @deprecated setDuration() 사용 권장 */
+    @Deprecated
+    public void setFull(boolean v)     { this.duration = v ? 2 : 0; }
     public void setMinutes(boolean[] v) {
         if (v != null && v.length == 60) System.arraycopy(v, 0, minutes, 0, 60);
     }
@@ -183,12 +198,14 @@ public class ChimeController {
         // Duration
         gc.gridx=0; gc.gridy=3; gc.gridwidth=1;
         topPanel.add(new JLabel("연주 시간:"), gc);
-        JRadioButton r15   = new JRadioButton("처음 15초만", !full);
-        JRadioButton rFull = new JRadioButton("끝까지",      full);
+        JRadioButton r15   = new JRadioButton("처음 15초만", duration == 0);
+        JRadioButton r30   = new JRadioButton("처음 30초만", duration == 1);
+        JRadioButton rFull = new JRadioButton("끝까지",      duration == 2);
         ButtonGroup bg = new ButtonGroup();
-        bg.add(r15); bg.add(rFull);
+        bg.add(r15); bg.add(r30); bg.add(rFull);
         gc.gridx=1; gc.gridwidth=1; topPanel.add(r15, gc);
-        gc.gridx=2; topPanel.add(rFull, gc);
+        gc.gridx=2;                 topPanel.add(r30, gc);
+        gc.gridx=3;                 topPanel.add(rFull, gc);
 
         dlg.add(topPanel, BorderLayout.NORTH);
 
@@ -221,9 +238,9 @@ public class ChimeController {
             minBoxes[0].setSelected(true);
         });
         okBtn.addActionListener(e -> {
-            enabled = onOffBox.isSelected();
-            file    = fileField.getText().trim();
-            full    = rFull.isSelected();
+            enabled  = onOffBox.isSelected();
+            file     = fileField.getText().trim();
+            duration = rFull.isSelected() ? 2 : r30.isSelected() ? 1 : 0;
             for (int i = 0; i < 60; i++) minutes[i] = minBoxes[i].isSelected();
             dlg.dispose();
         });
@@ -263,7 +280,7 @@ public class ChimeController {
             }
             java.util.List<String> cmd = new java.util.ArrayList<>();
             cmd.add(wmplayer);
-            if (!full) {
+            if (duration < 2) {          // 0=15초, 1=30초 → 재생 후 자동 닫기
                 cmd.add("/play");
                 cmd.add("/close");
             }
@@ -273,9 +290,10 @@ public class ChimeController {
             pb.redirectErrorStream(true);
             chimeProcess = pb.start();
 
-            if (!full) {
-                // 15초 후 자동 종료
-                new Timer(15000, ev -> {
+            if (duration < 2) {
+                // duration==0 → 15초, duration==1 → 30초 후 자동 종료
+                int stopMs = (duration == 1) ? 30000 : 15000;
+                new Timer(stopMs, ev -> {
                     ((Timer) ev.getSource()).stop();
                     stopChime();
                 }).start();
@@ -286,5 +304,29 @@ public class ChimeController {
                 "wmplayer 실행 오류:\n" + ex.getMessage(),
                 "차임벨 오류", JOptionPane.ERROR_MESSAGE);
         }
+
+        // ── 무지개 배경 타이머 (7색 순환, getRainbowSeconds()초 후 자동 복귀) ──
+        final java.awt.Color[] RAINBOW = {
+            new java.awt.Color(255,  0,  0),   // 빨
+            new java.awt.Color(255,127,  0),   // 주
+            new java.awt.Color(255,255,  0),   // 노
+            new java.awt.Color(  0,200,  0),   // 초
+            new java.awt.Color(  0,  0,255),   // 파
+            new java.awt.Color( 75,  0,130),   // 남
+            new java.awt.Color(148,  0,211),   // 보
+        };
+        final int totalSecs = Math.max(1, host.getRainbowSeconds());
+        final int[] colorIdx = {0};
+        final Timer[] rainbowTimer = {null};
+        rainbowTimer[0] = new Timer(1000, ev -> {
+            if (colorIdx[0] < totalSecs) {
+                host.setBgColorAndRepaint(RAINBOW[colorIdx[0] % RAINBOW.length]);
+                colorIdx[0]++;
+            } else {
+                rainbowTimer[0].stop();
+                host.restoreBgColor();
+            }
+        });
+        rainbowTimer[0].start();
     }
 }

@@ -36,12 +36,16 @@ public class CalendarAlarmPoller {
 
     // ── 호스트 콜백 인터페이스 ────────────────────────────────────
     public interface HostCallback {
-        /** wmplayer로 동영상 재생 (알람 동영상 파일 경로) */
-        void playAlarmMedia();
         /** 알람 텔레그램 Chat ID 반환 */
         String getTelegramChatId();
         /** 메시지 박스 준비 (화면 중앙 조정 등) */
         void prepareMessageBox();
+        /** 시계 배경색 변경 + 리페인트 */
+        void setBgColorAndRepaint(java.awt.Color c);
+        /** 시계 배경색 원래대로 복원 */
+        void restoreBgColor();
+        /** 무지개 지속 시간 (초) — INI rainbowSeconds, 기본 30 */
+        int getRainbowSeconds();
     }
 
     // ── 의존성 ────────────────────────────────────────────────────
@@ -137,25 +141,81 @@ public class CalendarAlarmPoller {
         }
     }
 
-    /** 알람 발동: 동영상 + 메시지박스 + 텔레그램 */
+    /** 알람 발동: 동영상 + 텍스트박스 팝업 + 텔레그램 */
     private void fireAlarm(GoogleCalendarService.CalendarEvent event) {
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("HH:mm");
         String title   = "📅 캘린더 알람";
         String content = "⏰ " + event.startTime.format(fmt) + "\n" + event.title;
 
-        // ① wmplayer 동영상 재생
-        if (host != null) {
-            new Thread(() -> host.playAlarmMedia(), "CalAlarmMedia").start();
-        }
+        // ① wmplayer 동영상 재생 불필요 (캘린더 알람은 팝업 + 무지개만)
 
-        // ② 메시지 박스 팝업 (EDT에서 실행)
+        // ② 텍스트박스 + 확인 버튼 팝업 + 무지개 배경 (EDT에서 실행)
         SwingUtilities.invokeLater(() -> {
             if (host != null) host.prepareMessageBox();
-            JOptionPane.showMessageDialog(
-                    null,
-                    content,
-                    title,
-                    JOptionPane.INFORMATION_MESSAGE);
+
+            javax.swing.JDialog dlg = new javax.swing.JDialog(
+                (java.awt.Frame) null, title, false);
+            dlg.setLayout(new java.awt.BorderLayout(8, 8));
+            dlg.getRootPane().setBorder(
+                javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+            javax.swing.JTextArea ta = new javax.swing.JTextArea(content, 6, 30);
+            ta.setEditable(false);
+            ta.setFont(new java.awt.Font("Malgun Gothic", java.awt.Font.PLAIN, 14));
+            ta.setLineWrap(true);
+            ta.setWrapStyleWord(true);
+            dlg.add(new javax.swing.JScrollPane(ta), java.awt.BorderLayout.CENTER);
+
+            // ── 무지개 배경 타이머 (7색 순환, getRainbowSeconds()초 후 자동 복귀) ──
+            final java.awt.Color[] RAINBOW = {
+                new java.awt.Color(255,  0,  0),   // 빨
+                new java.awt.Color(255,127,  0),   // 주
+                new java.awt.Color(255,255,  0),   // 노
+                new java.awt.Color(  0,200,  0),   // 초
+                new java.awt.Color(  0,  0,255),   // 파
+                new java.awt.Color( 75,  0,130),   // 남
+                new java.awt.Color(148,  0,211),   // 보
+            };
+            final int totalSecs = (host != null) ? Math.max(1, host.getRainbowSeconds()) : 30;
+            final int[] colorIdx = {0};
+            final javax.swing.Timer[] rainbowTimer = {null};
+            if (host != null) {
+                rainbowTimer[0] = new javax.swing.Timer(1000, ev -> {
+                    if (colorIdx[0] < totalSecs) {
+                        host.setBgColorAndRepaint(RAINBOW[colorIdx[0] % RAINBOW.length]);
+                        colorIdx[0]++;
+                    } else {
+                        // 완료 → 타이머 중지 + 원래 배경 복원
+                        rainbowTimer[0].stop();
+                        host.restoreBgColor();
+                    }
+                });
+                rainbowTimer[0].start();
+            }
+
+            javax.swing.JButton okBtn = new javax.swing.JButton("  확인  ");
+            okBtn.addActionListener(ev -> dlg.dispose());
+            // 다이얼로그 닫힐 때 타이머 중지 + 복원 (X 버튼 등)
+            dlg.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override public void windowClosed(java.awt.event.WindowEvent e) {
+                    if (rainbowTimer[0] != null) rainbowTimer[0].stop();
+                    if (host != null) host.restoreBgColor();
+                }
+            });
+            javax.swing.JPanel btnPanel = new javax.swing.JPanel(
+                new java.awt.FlowLayout(java.awt.FlowLayout.CENTER));
+            btnPanel.add(okBtn);
+            dlg.add(btnPanel, java.awt.BorderLayout.SOUTH);
+
+            dlg.setAlwaysOnTop(true);
+            dlg.pack();
+            // 화면 중앙 배치
+            java.awt.Dimension screen =
+                java.awt.Toolkit.getDefaultToolkit().getScreenSize();
+            dlg.setLocation(
+                (screen.width  - dlg.getWidth())  / 2,
+                (screen.height - dlg.getHeight()) / 2);
+            dlg.setVisible(true);
         });
 
         // ③ 텔레그램 메시지 전송

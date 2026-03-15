@@ -152,6 +152,11 @@ public class MenuBuilder {
         void    kakaoSend(String title, String msg);
         void    showKakaoGuide();
         void    prepareMessageBox();      // JOptionPane 위치 조정
+        void    prepareDialog(java.awt.Window dlg); // 다이얼로그 중앙 + 시계 우상단
+
+        // ── Google Calendar ───────────────────────────────────────
+        GoogleCalendarService getCalendarService();  // null 이면 미설정
+        TelegramBot           getTgForCalendar();    // 텔레그램 봇 (캘린더 전송용)
 
         // ── Log / Config ──────────────────────────────────────────
         String  getLogFilePath();         // 현재 로그 파일 경로
@@ -514,8 +519,8 @@ public class MenuBuilder {
         alarmItem.addActionListener(e -> host.showAlarmDialog());
         menu.add(alarmItem);
 
-        // ── 지금 Gmail 보내기 ──────────────────────────────────
-        menu.add(buildSendGmailItem());
+        // ── Gmail / Calendar ────────────────────────────────────
+        menu.add(buildGmailCalendarMenu());
 
         // ── 카카오톡 ────────────────────────────────────────────
         JMenu kakaoMenu = buildKakaoMenu(new JMenu("카카오톡..."));
@@ -1067,6 +1072,7 @@ public class MenuBuilder {
             host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false);
             host.setSparkleMode(false); host.setBubbleMode(false);
             host.setBgColor(null);
+            host.setBgImage("", null);  // bgImage 미해제 버그 수정
             host.setCameraMode(true);
             host.startCamera(url);
             host.repaintClock();
@@ -1594,6 +1600,147 @@ public class MenuBuilder {
         return kakaoMenu;
     }
 
+    // ── Gmail / Calendar 서브메뉴 ─────────────────────────────────
+    private JMenu buildGmailCalendarMenu() {
+        JMenu menu = new JMenu("📧 Gmail / Calendar");
+
+        // ① 지금 Gmail 보내기 (기존 기능 그대로)
+        menu.add(buildSendGmailItem());
+
+        menu.addSeparator();
+
+        // ② Calendar 설정 안내 (블로그 열기)
+        JMenuItem calGuide = new JMenuItem("📖 Calendar 설정 안내");
+        calGuide.addActionListener(e -> {
+            try {
+                java.awt.Desktop.getDesktop().browse(
+                    new java.net.URI("https://blog.naver.com/garpsu/224216876745"));
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(host.getOwnerComponent(),
+                    "브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        menu.add(calGuide);
+
+        menu.addSeparator();
+
+        // ③~⑧ 일정 조회 항목들
+        menu.add(buildCalendarQueryItem("📅 오늘 일정 조회",   "today"));
+        menu.add(buildCalendarQueryItem("📅 내일 일정 조회",   "tomorrow"));
+        menu.add(buildCalendarQueryItem("📅 향후 3일 조회",    "next3"));
+        menu.add(buildCalendarQueryItem("📅 향후 7일 조회",    "next7"));
+        menu.add(buildCalendarQueryItem("📅 한달 일정 조회",   "month"));
+        menu.add(buildCalendarQueryItem("📅 지난 7일 조회",    "past7"));
+
+        return menu;
+    }
+
+    /** 일정 조회 메뉴 항목 생성 공통 메서드 */
+    private JMenuItem buildCalendarQueryItem(String label, String mode) {
+        JMenuItem item = new JMenuItem(label);
+        item.addActionListener(e -> {
+            GoogleCalendarService cal = host.getCalendarService();
+            if (cal == null || !cal.isInitialized()) {
+                JOptionPane.showMessageDialog(host.getOwnerComponent(),
+                    "Google Calendar 연동이 설정되지 않았습니다.\n"
+                    + "Calendar 설정 안내를 참고하세요.",
+                    "Calendar", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            item.setEnabled(false);
+            new Thread(() -> {
+                try {
+                    java.util.List<GoogleCalendarService.CalendarEvent> events;
+                    String title;
+                    java.time.LocalDate today = java.time.LocalDate.now();
+                    java.time.format.DateTimeFormatter dateFmt =
+                        java.time.format.DateTimeFormatter.ofPattern("M/d");
+
+                    switch (mode) {
+                        case "today":
+                            events = cal.getToday();
+                            title  = "오늘 일정 (" + today.format(dateFmt) + ")";
+                            break;
+                        case "tomorrow":
+                            events = cal.getNextDays(2).stream()
+                                .filter(ev -> ev.startTime.toLocalDate()
+                                    .equals(today.plusDays(1)))
+                                .collect(java.util.stream.Collectors.toList());
+                            title  = "내일 일정 (" + today.plusDays(1).format(dateFmt) + ")";
+                            break;
+                        case "next3":
+                            events = cal.getNextDays(3);
+                            title  = "향후 3일 일정";
+                            break;
+                        case "next7":
+                            events = cal.getNextDays(7);
+                            title  = "향후 7일 일정";
+                            break;
+                        case "month":
+                            events = cal.getThisMonth();
+                            title  = "이번 달 일정";
+                            break;
+                        case "past7":
+                            events = cal.getPastDays(7);
+                            title  = "지난 7일 일정";
+                            break;
+                        default:
+                            events = java.util.Collections.emptyList();
+                            title  = "일정";
+                    }
+
+                    String msg = GoogleCalendarService.formatEvents(title, events);
+
+                    // 텔레그램 전송
+                    TelegramBot tg = host.getTgForCalendar();
+                    if (tg != null && tg.polling && !tg.myChatId.isEmpty()) {
+                        tg.send(tg.myChatId, msg);
+                    }
+
+                    // PC 팝업
+                    final String finalMsg = msg;
+                    final String finalTitle = title;
+                    SwingUtilities.invokeLater(() -> {
+                        item.setEnabled(true);
+                        showCalendarResult(finalTitle, finalMsg);
+                    });
+                } catch (Exception ex) {
+                    SwingUtilities.invokeLater(() -> {
+                        item.setEnabled(true);
+                        JOptionPane.showMessageDialog(host.getOwnerComponent(),
+                            "일정 조회 실패: " + ex.getMessage(),
+                            "Calendar 오류", JOptionPane.ERROR_MESSAGE);
+                    });
+                }
+            }, "CalendarQuery").start();
+        });
+        return item;
+    }
+
+    /** 일정 조회 결과를 텍스트 박스 + 확인 버튼으로 표시 */
+    private void showCalendarResult(String title, String text) {
+        JDialog dlg = new JDialog((java.awt.Frame) null, "📅 " + title, false);
+        dlg.setLayout(new BorderLayout(8, 8));
+        dlg.getRootPane().setBorder(
+            javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        JTextArea ta = new JTextArea(text, 20, 40);
+        ta.setEditable(false);
+        ta.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
+        ta.setLineWrap(true);
+        ta.setWrapStyleWord(true);
+        dlg.add(new JScrollPane(ta), BorderLayout.CENTER);
+
+        JButton okBtn = new JButton("  확인  ");
+        okBtn.addActionListener(ev -> dlg.dispose());
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        btnPanel.add(okBtn);
+        dlg.add(btnPanel, BorderLayout.SOUTH);
+
+        host.prepareDialog(dlg);
+        dlg.setVisible(true);
+    }
+
     // ── Gmail 보내기 항목 (별도 메서드로 가독성 향상) ──────────────
     private JMenuItem buildSendGmailItem() {
         JMenuItem sendGmailItem = new JMenuItem("📧 지금 Gmail 보내기");
@@ -1714,6 +1861,10 @@ public class MenuBuilder {
         @Override public boolean     checkAutoStart() { return AppRestarter.AutoStart.check(); }
         @Override public GmailSender getGmail()       { return app.gmail; }
         @Override public TelegramBot getTg()           { return app.tg; }
+
+        // ── Google Calendar ──────────────────────────────────────
+        @Override public GoogleCalendarService getCalendarService() { return app.calendarService; }
+        @Override public TelegramBot getTgForCalendar()             { return app.tg; }
 
         // ── 상태 쓰기 ───────────────────────────────────────
         @Override public void setAlwaysOnTop(boolean v)  { app.alwaysOnTop=v; app.setAlwaysOnTop(v); }
@@ -1853,6 +2004,7 @@ public class MenuBuilder {
         @Override public void    kakaoSend(String title, String msg) { app.kakao.sendKakao(title, msg); }
         @Override public void    showKakaoGuide()               { app.kakao.showKakaoGuide(); }
         @Override public void    prepareMessageBox()            { app.prepareMessageBox(); }
+        @Override public void    prepareDialog(java.awt.Window dlg) { app.prepareDialog(dlg); }
         @Override public String  getLogFilePath()               { return AppLogger.getLogFilePath(); }
         @Override public String  getConfigFilePath()            { return AnalogClockSwing.CONFIG_FILE; }
 

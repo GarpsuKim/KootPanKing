@@ -221,8 +221,9 @@ public class AnalogClockSwing extends JFrame {
     // ── chime 설정 임시 보관 (loadConfig 시점에 chimeController 가 미생성) ──
     private boolean   pendingChimeEnabled  = false;
     private String    pendingChimeFile     = "";
-    private boolean   pendingChimeFull     = false;
+    private int       pendingChimeDuration = 0;    // 0=15초, 1=30초, 2=끝까지
     private boolean[] pendingChimeMinutes  = null;
+    private int       rainbowSeconds       = 30;   // INI: rainbowSeconds (기본 30초)
 	
     // ── 공용 Random (매번 new 생성 방지) ─────────────────────────
     private final Random rnd = new Random();
@@ -278,10 +279,92 @@ public class AnalogClockSwing extends JFrame {
             @Override public ZoneId getTimeZone()             { return timeZone; }
             @Override public void prepareMessageBox()         { AnalogClockSwing.this.prepareMessageBox(); }
             @Override public void prepareDialog(java.awt.Window w) { AnalogClockSwing.this.prepareDialog(w); }
+            // ── 무지개 배경 ──────────────────────────────────────────
+            java.awt.Color  _chimeSavedBgColor    = null;
+            String          _chimeSavedBgImgPath  = "";
+            java.awt.image.BufferedImage _chimeSavedBgImgCache = null;
+            boolean _chimeSavedGalaxy   = false;
+            boolean _chimeSavedMatrix   = false;
+            boolean _chimeSavedRain     = false;
+            boolean _chimeSavedSnow     = false;
+            boolean _chimeSavedFire     = false;
+            boolean _chimeSavedSparkle  = false;
+            boolean _chimeSavedBubble   = false;
+            boolean _chimeSavedSlide    = false;
+            String  _chimeSavedSlideFol = "";
+            boolean _chimeSavedCamera   = false;
+            String  _chimeSavedCamUrl   = "";
+            boolean _chimeSavedYoutube  = false;
+            String  _chimeSavedYtUrl    = "";
+            boolean _chimeSavedItsCctv  = false;
+            boolean _chimeSnapshotTaken = false;
+            @Override public void setBgColorAndRepaint(java.awt.Color c) {
+                if (!_chimeSnapshotTaken) {
+                    _chimeSnapshotTaken    = true;
+                    _chimeSavedBgColor     = bgColor;
+                    _chimeSavedBgImgPath   = bgImagePath;
+                    _chimeSavedBgImgCache  = bgImageCache;
+                    _chimeSavedGalaxy      = galaxyMode;
+                    _chimeSavedMatrix      = matrixMode;
+                    _chimeSavedRain        = rainMode;
+                    _chimeSavedSnow        = snowMode;
+                    _chimeSavedFire        = fireMode;
+                    _chimeSavedSparkle     = sparkleMode;
+                    _chimeSavedBubble      = bubbleMode;
+                    _chimeSavedSlide       = slideEnabled;
+                    _chimeSavedSlideFol    = slideFolder;
+                    _chimeSavedCamera      = cameraMode && camera != null && camera.isRunning();
+                    _chimeSavedCamUrl      = cameraUrl;
+                    _chimeSavedYoutube     = youtubeMode;
+                    _chimeSavedYtUrl       = youtubeUrl != null ? youtubeUrl : "";
+                    _chimeSavedItsCctv     = itsCctv != null && itsCctv.isRunning();
+                }
+                galaxyMode = false; matrixMode = false;
+                rainMode   = false; snowMode   = false;
+                fireMode   = false; sparkleMode= false;
+                bubbleMode = false;
+                bgImagePath  = ""; bgImageCache = null;
+                stopSlideTimer();
+                stopCamera();
+                stopYoutube();
+                stopItsCctv();
+                bgColor = c;
+                clockPanel.repaint();
+            }
+            @Override public void restoreBgColor() {
+                if (!_chimeSnapshotTaken) return;
+                _chimeSnapshotTaken = false;
+                bgColor      = _chimeSavedBgColor;
+                bgImagePath  = _chimeSavedBgImgPath;
+                bgImageCache = _chimeSavedBgImgCache;
+                galaxyMode   = _chimeSavedGalaxy;
+                matrixMode   = _chimeSavedMatrix;
+                rainMode     = _chimeSavedRain;
+                snowMode     = _chimeSavedSnow;
+                fireMode     = _chimeSavedFire;
+                sparkleMode  = _chimeSavedSparkle;
+                bubbleMode   = _chimeSavedBubble;
+                if (_chimeSavedSlide && !_chimeSavedSlideFol.isEmpty()) {
+                    slideFolder = _chimeSavedSlideFol;
+                    startSlideTimer();
+                }
+                if (_chimeSavedCamera && !_chimeSavedCamUrl.isEmpty()) {
+                    cameraMode = true;
+                    startCamera(_chimeSavedCamUrl);
+                }
+                if (_chimeSavedYoutube && !_chimeSavedYtUrl.isEmpty()) {
+                    startYoutube(_chimeSavedYtUrl);
+                }
+                if (_chimeSavedItsCctv) {
+                    startItsCctv();
+                }
+                clockPanel.repaint();
+            }
+            @Override public int getRainbowSeconds() { return rainbowSeconds; }
 		});
         this.chimeController.setEnabled(parentChime.isEnabled());
         this.chimeController.setFile(parentChime.getFile());
-        this.chimeController.setFull(parentChime.isFull());
+        this.chimeController.setDuration(parentChime.getDuration());
         boolean[] parentMins = new boolean[60];
         System.arraycopy(parentChime.getMinutes(), 0, parentMins, 0, 60);
         this.chimeController.setMinutes(parentMins);
@@ -307,6 +390,88 @@ public class AnalogClockSwing extends JFrame {
             @Override public ZoneId getTimeZone()             { return timeZone; }
             @Override public void prepareMessageBox()         { AnalogClockSwing.this.prepareMessageBox(); }
             @Override public void prepareDialog(java.awt.Window w) { AnalogClockSwing.this.prepareDialog(w); }
+            // ── 무지개 배경 ──────────────────────────────────────────
+            java.awt.Color  _chimeSavedBgColor    = null;
+            String          _chimeSavedBgImgPath  = "";
+            java.awt.image.BufferedImage _chimeSavedBgImgCache = null;
+            boolean _chimeSavedGalaxy   = false;
+            boolean _chimeSavedMatrix   = false;
+            boolean _chimeSavedRain     = false;
+            boolean _chimeSavedSnow     = false;
+            boolean _chimeSavedFire     = false;
+            boolean _chimeSavedSparkle  = false;
+            boolean _chimeSavedBubble   = false;
+            boolean _chimeSavedSlide    = false;
+            String  _chimeSavedSlideFol = "";
+            boolean _chimeSavedCamera   = false;
+            String  _chimeSavedCamUrl   = "";
+            boolean _chimeSavedYoutube  = false;
+            String  _chimeSavedYtUrl    = "";
+            boolean _chimeSavedItsCctv  = false;
+            boolean _chimeSnapshotTaken = false;
+            @Override public void setBgColorAndRepaint(java.awt.Color c) {
+                if (!_chimeSnapshotTaken) {
+                    _chimeSnapshotTaken    = true;
+                    _chimeSavedBgColor     = bgColor;
+                    _chimeSavedBgImgPath   = bgImagePath;
+                    _chimeSavedBgImgCache  = bgImageCache;
+                    _chimeSavedGalaxy      = galaxyMode;
+                    _chimeSavedMatrix      = matrixMode;
+                    _chimeSavedRain        = rainMode;
+                    _chimeSavedSnow        = snowMode;
+                    _chimeSavedFire        = fireMode;
+                    _chimeSavedSparkle     = sparkleMode;
+                    _chimeSavedBubble      = bubbleMode;
+                    _chimeSavedSlide       = slideEnabled;
+                    _chimeSavedSlideFol    = slideFolder;
+                    _chimeSavedCamera      = cameraMode && camera != null && camera.isRunning();
+                    _chimeSavedCamUrl      = cameraUrl;
+                    _chimeSavedYoutube     = youtubeMode;
+                    _chimeSavedYtUrl       = youtubeUrl != null ? youtubeUrl : "";
+                    _chimeSavedItsCctv     = itsCctv != null && itsCctv.isRunning();
+                }
+                galaxyMode = false; matrixMode = false;
+                rainMode   = false; snowMode   = false;
+                fireMode   = false; sparkleMode= false;
+                bubbleMode = false;
+                bgImagePath  = ""; bgImageCache = null;
+                stopSlideTimer();
+                stopCamera();
+                stopYoutube();
+                stopItsCctv();
+                bgColor = c;
+                clockPanel.repaint();
+            }
+            @Override public void restoreBgColor() {
+                if (!_chimeSnapshotTaken) return;
+                _chimeSnapshotTaken = false;
+                bgColor      = _chimeSavedBgColor;
+                bgImagePath  = _chimeSavedBgImgPath;
+                bgImageCache = _chimeSavedBgImgCache;
+                galaxyMode   = _chimeSavedGalaxy;
+                matrixMode   = _chimeSavedMatrix;
+                rainMode     = _chimeSavedRain;
+                snowMode     = _chimeSavedSnow;
+                fireMode     = _chimeSavedFire;
+                sparkleMode  = _chimeSavedSparkle;
+                bubbleMode   = _chimeSavedBubble;
+                if (_chimeSavedSlide && !_chimeSavedSlideFol.isEmpty()) {
+                    slideFolder = _chimeSavedSlideFol;
+                    startSlideTimer();
+                }
+                if (_chimeSavedCamera && !_chimeSavedCamUrl.isEmpty()) {
+                    cameraMode = true;
+                    startCamera(_chimeSavedCamUrl);
+                }
+                if (_chimeSavedYoutube && !_chimeSavedYtUrl.isEmpty()) {
+                    startYoutube(_chimeSavedYtUrl);
+                }
+                if (_chimeSavedItsCctv) {
+                    startItsCctv();
+                }
+                clockPanel.repaint();
+            }
+            @Override public int getRainbowSeconds() { return rainbowSeconds; }
 		});
         applyChimeConfig(); // loadConfig() 에서 임시 보관한 chime 설정 적용
         // AlarmController 초기화
@@ -315,7 +480,7 @@ public class AnalogClockSwing extends JFrame {
             push, gmail, kakao, tg,
             new AlarmController.HostCallback() {
                 @Override public String  getChimeFile()   { return chimeController.getFile(); }
-                @Override public boolean isChimeFull()    { return chimeController.isFull(); }
+                @Override public boolean isChimeFull()    { return chimeController.getDuration() == 2; }
                 @Override public ZoneId  getTimeZone()    { return timeZone; }
                 @Override public void prepareMessageBox()              { AnalogClockSwing.this.prepareMessageBox(); }
                 @Override public void prepareDialog(java.awt.Window w) { AnalogClockSwing.this.prepareDialog(w); }
@@ -326,6 +491,88 @@ public class AnalogClockSwing extends JFrame {
                 @Override public void showPushoverQrDialog(java.awt.Window p) {
                     AnalogClockSwing.this.showPushoverQrDialog(p);
 				}
+                // ── 무지개 배경 (CalendarAlarmPoller 와 동일 패턴) ──────────
+                java.awt.Color  _alarmSavedBgColor    = null;
+                String          _alarmSavedBgImgPath  = "";
+                java.awt.image.BufferedImage _alarmSavedBgImgCache = null;
+                boolean _alarmSavedGalaxy   = false;
+                boolean _alarmSavedMatrix   = false;
+                boolean _alarmSavedRain     = false;
+                boolean _alarmSavedSnow     = false;
+                boolean _alarmSavedFire     = false;
+                boolean _alarmSavedSparkle  = false;
+                boolean _alarmSavedBubble   = false;
+                boolean _alarmSavedSlide    = false;
+                String  _alarmSavedSlideFol = "";
+                boolean _alarmSavedCamera   = false;
+                String  _alarmSavedCamUrl   = "";
+                boolean _alarmSavedYoutube  = false;
+                String  _alarmSavedYtUrl    = "";
+                boolean _alarmSavedItsCctv  = false;
+                boolean _alarmSnapshotTaken = false;
+                @Override public void setBgColorAndRepaint(java.awt.Color c) {
+                    if (!_alarmSnapshotTaken) {
+                        _alarmSnapshotTaken    = true;
+                        _alarmSavedBgColor     = bgColor;
+                        _alarmSavedBgImgPath   = bgImagePath;
+                        _alarmSavedBgImgCache  = bgImageCache;
+                        _alarmSavedGalaxy      = galaxyMode;
+                        _alarmSavedMatrix      = matrixMode;
+                        _alarmSavedRain        = rainMode;
+                        _alarmSavedSnow        = snowMode;
+                        _alarmSavedFire        = fireMode;
+                        _alarmSavedSparkle     = sparkleMode;
+                        _alarmSavedBubble      = bubbleMode;
+                        _alarmSavedSlide       = slideEnabled;
+                        _alarmSavedSlideFol    = slideFolder;
+                        _alarmSavedCamera      = cameraMode && camera != null && camera.isRunning();
+                        _alarmSavedCamUrl      = cameraUrl;
+                        _alarmSavedYoutube     = youtubeMode;
+                        _alarmSavedYtUrl       = youtubeUrl != null ? youtubeUrl : "";
+                        _alarmSavedItsCctv     = itsCctv != null && itsCctv.isRunning();
+                    }
+                    galaxyMode = false; matrixMode = false;
+                    rainMode   = false; snowMode   = false;
+                    fireMode   = false; sparkleMode= false;
+                    bubbleMode = false;
+                    bgImagePath  = ""; bgImageCache = null;
+                    stopSlideTimer();
+                    stopCamera();
+                    stopYoutube();
+                    stopItsCctv();
+                    bgColor = c;
+                    clockPanel.repaint();
+                }
+                @Override public void restoreBgColor() {
+                    if (!_alarmSnapshotTaken) return; // 이미 복원됐거나 스냅샷 없으면 무시
+                    _alarmSnapshotTaken = false;       // 중복 호출 방지 (7색완료 + X버튼 동시)
+                    bgColor      = _alarmSavedBgColor;
+                    bgImagePath  = _alarmSavedBgImgPath;
+                    bgImageCache = _alarmSavedBgImgCache;
+                    galaxyMode   = _alarmSavedGalaxy;
+                    matrixMode   = _alarmSavedMatrix;
+                    rainMode     = _alarmSavedRain;
+                    snowMode     = _alarmSavedSnow;
+                    fireMode     = _alarmSavedFire;
+                    sparkleMode  = _alarmSavedSparkle;
+                    bubbleMode   = _alarmSavedBubble;
+                    if (_alarmSavedSlide && !_alarmSavedSlideFol.isEmpty()) {
+                        slideFolder = _alarmSavedSlideFol;
+                        startSlideTimer();
+                    }
+                    if (_alarmSavedCamera && !_alarmSavedCamUrl.isEmpty()) {
+                        cameraMode = true;
+                        startCamera(_alarmSavedCamUrl);
+                    }
+                    if (_alarmSavedYoutube && !_alarmSavedYtUrl.isEmpty()) {
+                        startYoutube(_alarmSavedYtUrl);
+                    }
+                    if (_alarmSavedItsCctv) {
+                        startItsCctv();
+                    }
+                    clockPanel.repaint();
+                }
+                @Override public int getRainbowSeconds() { return rainbowSeconds; }
 			}
 		);
         alarmController.loadAlarms();
@@ -482,6 +729,7 @@ public class AnalogClockSwing extends JFrame {
         startShowTimer();
         startAnimTimer();
         chimeController.startCheckTimer();
+        alarmController.startCheckTimer();
         // 슬라이드쇼: loadConfig(parent=null) 또는 복사 생성자(parent!=null) 모두 여기서 시작
         if (!slideImages.isEmpty() && slideEnabled) {
             startSlideTimer();          // side effect + 타이머 설정
@@ -495,7 +743,8 @@ public class AnalogClockSwing extends JFrame {
         if (parent == null) tg.startPolling();
 
         // ── Google Calendar 초기화 (백그라운드) ──────────────────
-        if (parent == null) {
+        // credentials.json 이 존재할 때만 시도 (없으면 조용히 건너뜀)
+        if (parent == null && GoogleCalendarService.credentialsExist()) {
             new Thread(() -> {
                 calendarService = new GoogleCalendarService();
                 if (calendarService.init()) {
@@ -504,30 +753,105 @@ public class AnalogClockSwing extends JFrame {
                         calendarService,
                         tg,
                         new CalendarAlarmPoller.HostCallback() {
-                            @Override public void playAlarmMedia() {
-                                chimeController.stopChime();
-                                // 알람 미디어 파일이 있으면 chimeController로 재생
-                                // (차임벨 파일을 알람 사운드로 공용 사용)
-                                if (!chimeController.getFile().isEmpty()) {
-                                    new Thread(() -> {
-                                        try {
-                                            String wmplayer = "C:\\Program Files\\Windows Media Player\\wmplayer.exe";
-                                            if (!new java.io.File(wmplayer).exists())
-                                                wmplayer = "C:\\Program Files (x86)\\Windows Media Player\\wmplayer.exe";
-                                            new ProcessBuilder(wmplayer, "/play", "/close",
-                                                chimeController.getFile()).start();
-                                        } catch (Exception ex) {
-                                            System.out.println("[CalAlarm] 미디어 재생 오류: " + ex.getMessage());
-                                        }
-                                    }, "CalAlarmPlay").start();
-                                }
-                            }
                             @Override public String getTelegramChatId() {
                                 return tg.myChatId;
                             }
                             @Override public void prepareMessageBox() {
                                 AnalogClockSwing.this.prepareMessageBox();
                             }
+                            // ── 알람 발동 직전 배경 상태 스냅샷 ──
+                            // setBgColorAndRepaint 첫 호출 시(무지개 시작 직전) 실제 상태를 저장.
+                            // 아래 모든 배경 모드를 보존하고 무지개 종료 후 원상복귀한다:
+                            //   단색(bgColor) / 고정이미지 / 갤럭시 / 매트릭스 / 비 / 눈 / 불꽃
+                            //   반짝이 / 버블 / 슬라이드쇼 / 카메라 / 유튜브 / ITS CCTV
+                            java.awt.Color  _savedBgColor    = null;
+                            String          _savedBgImgPath  = "";
+                            java.awt.image.BufferedImage _savedBgImgCache = null;
+                            boolean _savedGalaxy   = false;
+                            boolean _savedMatrix   = false;
+                            boolean _savedRain     = false;
+                            boolean _savedSnow     = false;
+                            boolean _savedFire     = false;
+                            boolean _savedSparkle  = false;
+                            boolean _savedBubble   = false;
+                            boolean _savedSlide    = false;    // 슬라이드쇼
+                            String  _savedSlideFol = "";
+                            boolean _savedCamera   = false;    // 카메라
+                            String  _savedCamUrl   = "";
+                            boolean _savedYoutube  = false;    // 유튜브
+                            String  _savedYtUrl    = "";
+                            boolean _savedItsCctv  = false;    // ITS CCTV
+                            boolean _snapshotTaken = false;    // 무지개 중 재스냅샷 방지
+
+                            @Override public void setBgColorAndRepaint(java.awt.Color c) {
+                                // 무지개 첫 번째 색상 적용 전에 현재 상태를 스냅샷
+                                if (!_snapshotTaken) {
+                                    _snapshotTaken   = true;
+                                    _savedBgColor    = bgColor;
+                                    _savedBgImgPath  = bgImagePath;
+                                    _savedBgImgCache = bgImageCache;
+                                    _savedGalaxy     = galaxyMode;
+                                    _savedMatrix     = matrixMode;
+                                    _savedRain       = rainMode;
+                                    _savedSnow       = snowMode;
+                                    _savedFire       = fireMode;
+                                    _savedSparkle    = sparkleMode;
+                                    _savedBubble     = bubbleMode;
+                                    _savedSlide      = slideEnabled;
+                                    _savedSlideFol   = slideFolder;
+                                    _savedCamera     = cameraMode && camera != null && camera.isRunning();
+                                    _savedCamUrl     = cameraUrl;
+                                    _savedYoutube    = youtubeMode;
+                                    _savedYtUrl      = youtubeUrl != null ? youtubeUrl : "";
+                                    _savedItsCctv    = itsCctv != null && itsCctv.isRunning();
+                                }
+                                // 모든 배경 모드 중지 후 무지개 단색 적용
+                                galaxyMode = false; matrixMode = false;
+                                rainMode   = false; snowMode   = false;
+                                fireMode   = false; sparkleMode= false;
+                                bubbleMode = false;
+                                bgImagePath  = ""; bgImageCache = null;
+                                stopSlideTimer();
+                                stopCamera();
+                                stopYoutube();
+                                stopItsCctv();
+                                bgColor = c;
+                                clockPanel.repaint();
+                            }
+                            @Override public void restoreBgColor() {
+                                if (!_snapshotTaken) return; // 이미 복원됐거나 스냅샷 없으면 무시
+                                _snapshotTaken = false;      // 중복 호출 방지 (7색완료 + X버튼 동시)
+                                bgColor      = _savedBgColor;
+                                bgImagePath  = _savedBgImgPath;
+                                bgImageCache = _savedBgImgCache;
+                                galaxyMode   = _savedGalaxy;
+                                matrixMode   = _savedMatrix;
+                                rainMode     = _savedRain;
+                                snowMode     = _savedSnow;
+                                fireMode     = _savedFire;
+                                sparkleMode  = _savedSparkle;
+                                bubbleMode   = _savedBubble;
+                                // 슬라이드쇼 복원 (이미지 목록은 stopSlideTimer 후에도 유지됨)
+                                if (_savedSlide && !_savedSlideFol.isEmpty()) {
+                                    slideFolder = _savedSlideFol;
+                                    startSlideTimer();
+                                }
+                                // 카메라 복원
+                                if (_savedCamera && !_savedCamUrl.isEmpty()) {
+                                    cameraMode = true;
+                                    startCamera(_savedCamUrl);
+                                }
+                                // 유튜브 복원
+                                if (_savedYoutube && !_savedYtUrl.isEmpty()) {
+                                    startYoutube(_savedYtUrl);
+                                }
+                                // ITS CCTV 복원
+                                if (_savedItsCctv) {
+                                    startItsCctv();
+                                }
+                                clockPanel.repaint();
+                            }
+                            @Override public int getRainbowSeconds() { return rainbowSeconds; }
                         });
                     SwingUtilities.invokeLater(() -> calendarPoller.start());
                     System.out.println("[Main] Google Calendar 연동 완료");
@@ -1436,7 +1760,7 @@ public class AnalogClockSwing extends JFrame {
         dlg.setVisible(true);
 	}
 	
-    private void prepareDialog(java.awt.Window dlg) {
+    void prepareDialog(java.awt.Window dlg) {
         moveToTopRight();
         if (dlg != null) {
             dlg.pack();
@@ -1711,7 +2035,7 @@ public class AnalogClockSwing extends JFrame {
         try {
             pendingChimeEnabled = Boolean.parseBoolean(config.getProperty("chimeEnabled","false"));
             pendingChimeFile    = config.getProperty("chimeFile","");
-            pendingChimeFull    = Boolean.parseBoolean(config.getProperty("chimeFull","false"));
+            pendingChimeDuration = Integer.parseInt(config.getProperty("chimeDuration","0"));
             String mins = config.getProperty("chimeMinutes","0");
             boolean[] loadedMins = new boolean[60];
             for (String m : mins.split(",")) {
@@ -1720,6 +2044,7 @@ public class AnalogClockSwing extends JFrame {
                 } catch (Exception ignored2) {}
             }
             pendingChimeMinutes = loadedMins;
+            rainbowSeconds = Integer.parseInt(config.getProperty("rainbowSeconds","30"));
         } catch (Exception ignored) {}
         // ── 인증 정보 / 경로 캐시: 앞쪽 파싱 예외와 무관하게 항상 읽는다 ──
         try {
@@ -1821,7 +2146,7 @@ public class AnalogClockSwing extends JFrame {
         if (chimeController == null) return;
         chimeController.setEnabled(pendingChimeEnabled);
         chimeController.setFile(pendingChimeFile);
-        chimeController.setFull(pendingChimeFull);
+        chimeController.setDuration(pendingChimeDuration);
         if (pendingChimeMinutes != null) {
             chimeController.setMinutes(pendingChimeMinutes);
         }
@@ -1842,7 +2167,8 @@ public class AnalogClockSwing extends JFrame {
         config.setProperty("fontSize",     String.valueOf(numberFont.getSize()));
         config.setProperty("digFontName",  digitalFont.getFamily());
         config.setProperty("digFontSize",  String.valueOf(digitalFont.getSize()));
-        if (bgColor     != null) config.setProperty("bgColor",     String.valueOf(bgColor.getRGB()));
+        if (bgColor != null) config.setProperty("bgColor", String.valueOf(bgColor.getRGB()));
+        else                 config.remove("bgColor");  // null(marble)이면 키 삭제 → 재시작 시 단색 잔류 방지
         config.setProperty("bgImagePath", bgImagePath != null ? bgImagePath : "");
         if (tickColor   != null) config.setProperty("tickColor",   String.valueOf(tickColor.getRGB()));
         config.setProperty("tickVisible",   String.valueOf(tickVisible));
@@ -1900,11 +2226,12 @@ public class AnalogClockSwing extends JFrame {
         // Chime
         config.setProperty("chimeEnabled", String.valueOf(chimeController.isEnabled()));
         config.setProperty("chimeFile",    chimeController.getFile());
-        config.setProperty("chimeFull",    String.valueOf(chimeController.isFull()));
+        config.setProperty("chimeDuration", String.valueOf(chimeController.getDuration()));
         StringBuilder sb = new StringBuilder();
         boolean[] mins = chimeController.getMinutes();
         for (int i=0; i<60; i++) if (mins[i]) { if (sb.length()>0) sb.append(","); sb.append(i); }
         config.setProperty("chimeMinutes", sb.toString());
+        config.setProperty("rainbowSeconds", String.valueOf(rainbowSeconds));
         try (FileOutputStream fos = new FileOutputStream(CONFIG_FILE)) {
             config.store(fos, "AnalogClockSwing Settings");
 		} catch (IOException ignored) {}

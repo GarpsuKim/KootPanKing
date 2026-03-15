@@ -6,6 +6,9 @@ import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.*;
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
 
 /**
  * GoogleCalendarService - Google Calendar API 연동 클래스 (순수 Java 구현)
@@ -91,6 +94,41 @@ public class GoogleCalendarService {
     public boolean isInitialized() { return initialized; }
 
     /**
+     * credentials.json 준비 여부 확인 + 자동 복사.
+     *
+     * 1) 실행 폴더에 credentials.json 이 있으면 → true
+     * 2) 없으면 C:\temp\credentials.json 확인
+     *    → 있으면 실행 폴더로 복사 후 true
+     *    → 없으면 false (로그인 생략)
+     */
+    public static boolean credentialsExist() {
+        File dest = resolveFile(CREDENTIALS_FILE);
+        System.out.println("[GCalendar] credentials.json 탐색 경로: " + dest.getAbsolutePath());
+        if (dest.exists()) return true;
+
+        // C:\temp\credentials.json 확인
+        File backup = new File("C:\\temp\\credentials.json");
+        if (!backup.exists()) {
+            System.out.println("[GCalendar] credentials.json 없음 - Calendar 초기화 생략");
+            return false;
+        }
+
+        // 실행 폴더로 복사
+        try {
+            dest.getParentFile().mkdirs();
+            java.nio.file.Files.copy(
+                backup.toPath(), dest.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            System.out.println("[GCalendar] credentials.json 복사 완료: "
+                + backup.getAbsolutePath() + " → " + dest.getAbsolutePath());
+            return true;
+        } catch (Exception e) {
+            System.out.println("[GCalendar] credentials.json 복사 실패: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * 로그아웃 - 메모리 토큰 초기화 + token.json 삭제.
      * 다음 init() 호출 시 브라우저 인증부터 다시 시작.
      * @return 삭제된 token.json 경로 (파일이 없었으면 null)
@@ -125,6 +163,13 @@ public class GoogleCalendarService {
     public List<CalendarEvent> getNextDays(int days) {
         ZonedDateTime start = LocalDate.now().atStartOfDay(ZoneId.systemDefault());
         ZonedDateTime end   = start.plusDays(days);
+        return getEvents(start, end);
+    }
+
+    /** 지난 N일 일정 조회 (오늘 포함) */
+    public List<CalendarEvent> getPastDays(int days) {
+        ZonedDateTime end   = LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault());
+        ZonedDateTime start = end.minusDays(days);
         return getEvents(start, end);
     }
 
@@ -219,15 +264,16 @@ public class GoogleCalendarService {
             String url = CALENDAR_API + "/users/me/calendarList?maxResults=100";
             String json = httpGet(url);
 
-            // calendarList 응답의 items 배열에서 각 캘린더 id 추출
-            String itemsStr = extractBetween(json, "\"items\":[", null);
-            if (itemsStr == null) return ids;
-            List<String> objects = splitJsonObjects(itemsStr);
-            for (String obj : objects) {
-                String calId = extractJsonStr(obj, "id");
+            JSONObject root = (JSONObject) new JSONParser().parse(json);
+            JSONArray items = (JSONArray) root.get("items");
+            if (items == null) return ids;
+            for (Object obj : items) {
+                JSONObject cal = (JSONObject) obj;
+                String calId = (String) cal.get("id");
+                String summary = (String) cal.get("summary");
                 if (calId != null && !calId.isEmpty()) {
                     ids.add(calId);
-                    System.out.println("[GCalendar] 캘린더: " + calId);
+                    System.out.println("[GCalendar] 캘린더: " + calId + " (" + summary + ")");
                 }
             }
         } catch (Exception e) {
@@ -240,38 +286,38 @@ public class GoogleCalendarService {
 
     private List<CalendarEvent> parseEvents(String json) {
         List<CalendarEvent> list = new ArrayList<>();
-        // "items" 배열 추출
-        String items = extractBetween(json, "\"items\":[", null);
-        if (items == null) return list;
-
-        // 각 이벤트 객체 분리 (중첩 브레이스 카운팅)
-        List<String> objects = splitJsonObjects(items);
-        for (String obj : objects) {
-            try {
-                CalendarEvent ev = parseOneEvent(obj);
-                if (ev != null) list.add(ev);
-            } catch (Exception e) {
-                System.out.println("[GCalendar] 이벤트 파싱 오류: " + e.getMessage());
+        try {
+            JSONObject root = (JSONObject) new JSONParser().parse(json);
+            JSONArray items = (JSONArray) root.get("items");
+            if (items == null) return list;
+            for (Object obj : items) {
+                try {
+                    CalendarEvent ev = parseOneEvent((JSONObject) obj);
+                    if (ev != null) list.add(ev);
+                } catch (Exception e) {
+                    System.out.println("[GCalendar] 이벤트 파싱 오류: " + e.getMessage());
+                }
             }
+        } catch (Exception e) {
+            System.out.println("[GCalendar] events JSON 파싱 오류: " + e.getMessage());
         }
         return list;
     }
 
-    private CalendarEvent parseOneEvent(String obj) {
-        String id    = extractJsonStr(obj, "id");
-        String title = extractJsonStr(obj, "summary");
+    private CalendarEvent parseOneEvent(JSONObject obj) {
+        String id    = (String) obj.get("id");
+        String title = (String) obj.get("summary");
         if (title == null || title.isEmpty()) title = "(제목 없음)";
 
-        // start 블록
-        String startBlock = extractBlock(obj, "\"start\"");
-        String endBlock   = extractBlock(obj, "\"end\"");
+        JSONObject startBlock = (JSONObject) obj.get("start");
+        JSONObject endBlock   = (JSONObject) obj.get("end");
         if (startBlock == null || endBlock == null) return null;
 
         boolean allDay = false;
         ZonedDateTime startTime, endTime;
 
-        String startDt   = extractJsonStr(startBlock, "dateTime");
-        String startDate = extractJsonStr(startBlock, "date");
+        String startDt   = (String) startBlock.get("dateTime");
+        String startDate = (String) startBlock.get("date");
 
         if (startDt != null && !startDt.isEmpty()) {
             startTime = parseRfc3339(startDt);
@@ -280,8 +326,8 @@ public class GoogleCalendarService {
             allDay = true;
         } else return null;
 
-        String endDt   = extractJsonStr(endBlock, "dateTime");
-        String endDate = extractJsonStr(endBlock, "date");
+        String endDt   = (String) endBlock.get("dateTime");
+        String endDate = (String) endBlock.get("date");
 
         if (endDt != null && !endDt.isEmpty()) {
             endTime = parseRfc3339(endDt);
@@ -392,13 +438,14 @@ public class GoogleCalendarService {
 
     private void loadCredentials(File f) throws Exception {
         String json = readFile(f);
-        // "installed" 또는 "web" 블록 안에서 client_id / client_secret 추출
-        String block = extractBlock(json, "\"installed\"");
-        if (block == null) block = extractBlock(json, "\"web\"");
-        if (block == null) block = json;
+        JSONObject root = (JSONObject) new JSONParser().parse(json);
+        // "installed" 또는 "web" 블록
+        JSONObject block = (JSONObject) root.get("installed");
+        if (block == null) block = (JSONObject) root.get("web");
+        if (block == null) block = root;
 
-        clientId     = extractJsonStr(block, "client_id");
-        clientSecret = extractJsonStr(block, "client_secret");
+        clientId     = (String) block.get("client_id");
+        clientSecret = (String) block.get("client_secret");
 
         if (clientId == null || clientId.isEmpty())
             throw new Exception("credentials.json 에서 client_id 를 찾을 수 없습니다.");
@@ -407,15 +454,20 @@ public class GoogleCalendarService {
     // ── 내부: token.json 저장 / 로드 ─────────────────────────────
 
     private void parseAndStoreToken(String json) {
-        String at = extractJsonStr(json, "access_token");
-        String rt = extractJsonStr(json, "refresh_token");
-        String ei = extractJsonStr(json, "expires_in");
+        try {
+            JSONObject obj = (JSONObject) new JSONParser().parse(json);
+            String at = (String) obj.get("access_token");
+            String rt = (String) obj.get("refresh_token");
+            Object ei = obj.get("expires_in");
 
-        if (at != null && !at.isEmpty()) accessToken = at;
-        if (rt != null && !rt.isEmpty()) refreshToken = rt;
-        if (ei != null && !ei.isEmpty()) {
-            try { expiresAt = System.currentTimeMillis() + Long.parseLong(ei) * 1000; }
-            catch (NumberFormatException ignored) {}
+            if (at != null && !at.isEmpty()) accessToken = at;
+            if (rt != null && !rt.isEmpty()) refreshToken = rt;
+            if (ei != null) {
+                try { expiresAt = System.currentTimeMillis() + Long.parseLong(ei.toString()) * 1000; }
+                catch (NumberFormatException ignored) {}
+            }
+        } catch (Exception e) {
+            System.out.println("[GCalendar] 토큰 파싱 오류: " + e.getMessage());
         }
     }
 
@@ -440,14 +492,15 @@ public class GoogleCalendarService {
     private void loadToken(File f) {
         try {
             String json = readFile(f);
-            String at = extractJsonStr(json, "access_token");
-            String rt = extractJsonStr(json, "refresh_token");
-            String ea = extractJsonStr(json, "expires_at");
+            JSONObject obj = (JSONObject) new JSONParser().parse(json);
+            String at = (String) obj.get("access_token");
+            String rt = (String) obj.get("refresh_token");
+            Object ea = obj.get("expires_at");
 
             if (at != null) accessToken  = at;
             if (rt != null) refreshToken = rt;
             if (ea != null) {
-                try { expiresAt = Long.parseLong(ea); }
+                try { expiresAt = Long.parseLong(ea.toString()); }
                 catch (NumberFormatException ignored) {}
             }
         } catch (Exception e) {
@@ -458,7 +511,7 @@ public class GoogleCalendarService {
     // ── 내부: HTTP 유틸 ───────────────────────────────────────────
 
     private String httpGet(String urlStr) throws Exception {
-        URL url = new URL(urlStr);
+        URL url = URI.create(urlStr).toURL();
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
         con.setRequestMethod("GET");
         con.setRequestProperty("Authorization", "Bearer " + accessToken);
@@ -470,7 +523,7 @@ public class GoogleCalendarService {
     }
 
     private String httpPost(String urlStr, String body) throws Exception {
-        URL url = new URL(urlStr);
+        URL url = URI.create(urlStr).toURL();
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
         con.setRequestMethod("POST");
         con.setDoOutput(true);
@@ -496,58 +549,6 @@ public class GoogleCalendarService {
         while ((line = br.readLine()) != null) sb.append(line).append("\n");
         br.close();
         return sb.toString();
-    }
-
-    // ── 내부: JSON 파싱 유틸 ──────────────────────────────────────
-
-    /** "key": "value" 추출 */
-    private static String extractJsonStr(String json, String key) {
-        Pattern p = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-        Matcher m = p.matcher(json);
-        return m.find() ? m.group(1) : null;
-    }
-
-    /** { } 블록 추출 (key: { ... }) */
-    private static String extractBlock(String json, String key) {
-        int ki = json.indexOf(key);
-        if (ki < 0) return null;
-        int start = json.indexOf('{', ki + key.length());
-        if (start < 0) return null;
-        int depth = 0, i = start;
-        while (i < json.length()) {
-            char c = json.charAt(i);
-            if      (c == '{') depth++;
-            else if (c == '}') { depth--; if (depth == 0) return json.substring(start, i + 1); }
-            i++;
-        }
-        return null;
-    }
-
-    /** "items":[ ... ] 에서 [ 뒤 내용 추출 */
-    private static String extractBetween(String json, String startToken, String endToken) {
-        int si = json.indexOf(startToken);
-        if (si < 0) return null;
-        return json.substring(si + startToken.length());
-    }
-
-    /** [ { ... }, { ... } ] 형태에서 최상위 {} 객체들 분리 */
-    private static List<String> splitJsonObjects(String arr) {
-        List<String> list = new ArrayList<>();
-        int depth = 0, start = -1;
-        for (int i = 0; i < arr.length(); i++) {
-            char c = arr.charAt(i);
-            if (c == '{') {
-                if (depth == 0) start = i;
-                depth++;
-            } else if (c == '}') {
-                depth--;
-                if (depth == 0 && start >= 0) {
-                    list.add(arr.substring(start, i + 1));
-                    start = -1;
-                }
-            }
-        }
-        return list;
     }
 
     /** RFC3339 → ZonedDateTime (예: 2026-03-14T10:00:00+09:00) */

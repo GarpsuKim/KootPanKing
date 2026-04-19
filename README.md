@@ -8,12 +8,14 @@ no port forwarding, no VPN, just Telegram.
 이미지 표시
 
 🚀 What is KootPanKing?
+
 KootPanKing is a Windows desktop clock app that doubles as a
 full PC remote control system via Telegram bot.
 It stays running in the system tray — so your Telegram bot is
 always alive, always ready.
 
 ✨ Key Features
+
 🤖 Telegram Remote Control
 CommandDescription/captureCapture clock screen → send to Telegram/sFull screen capture → send to Telegram/c1~/c4Capture specific monitor (1~4)/cmdExecute DOS/CMD commands remotely/psExecute PowerShell commands remotely/downShutdown PC remotely (with confirmation)/rebootReboot PC remotely (with confirmation)/whGet PC info (IP, OS, username)/textSend text → auto-save to PC/saveSave files to PC remotely/msQuery Google Calendar schedule/nsQuery Naver Calendar schedule/hShow command list
 🕐 Analog Clock
@@ -33,11 +35,13 @@ CCTV / YouTube live background feed
 Windows auto-start
 Auto-update system
 
-> ⚠️ Current UI language: Korean only.  
+> ⚠️ Current UI language: Korean only.
+> 
 > English UI is planned for the next major release.  
 > All Telegram commands work in English.
 
 💡 Why Telegram?
+
 Most remote control tools require:
 OthersKootPanKing❌ Port forwarding✅ Zero network config❌ VPN setup✅ Works behind any router❌ Static IP required✅ Works from anywhere❌ Paid subscription✅ Free (Telegram is free)
 KootPanKing uses Telegram bot as a secure relay —
@@ -52,19 +56,25 @@ Extract and run KootPanKing.exe
 
 
 ⚠️ Windows SmartScreen may warn on first run.
+
 Click "More info" → "Run anyway"
 Source code is fully open — build it yourself if unsure.
 
 
 🔨 Build from Source
+
 bash# Requirements: JDK 17+
 # Clone this repository, then:
 
+
 _ReleaseBLD_All.bat
+
 
 # Output: dist\KootPanKing\KootPanKing.exe
 
+
 🤖 Telegram Bot Setup (5 minutes)
+
 
 Open Telegram → search @BotFather
 Send /newbot → follow instructions → copy the token
@@ -89,4 +99,5 @@ No data is sent to any third-party server
 
 
 ⭐ If this helped you, please give it a Star!
+
 It helps others discover this project.

@@ -3,9 +3,8 @@
 Control your PC from anywhere through any router —
 no port forwarding, no VPN, just Telegram.
 
-이미지 표시
-이미지 표시
-이미지 표시
+Youtube : https://youtu.be/uxmMIlMyVZE?si=FDz8WJ2lbRVow6Qc&t=3
+
 
 🚀 What is KootPanKing?
 

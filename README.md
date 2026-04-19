@@ -1,79 +1,92 @@
-<img width="645" height="859" alt="image" src="https://github.com/user-attachments/assets/2dc1d594-b4a7-4886-a006-2dd0de7d6cdf" />
+🕐 KootPanKing — Analog Clock + PC Remote Control via Telegram
 
-⚠️ Windows 보안 경고 해결 방법
+Control your PC from anywhere through any router —
+no port forwarding, no VPN, just Telegram.
 
-이 프로그램은 개인 개발자 [김갑수 , garpsu@naver.com ]가 Java로 개발하여 배포한 EXE 파일입니다.  Windows SmartScreen이 "알 수 없는 게시자" 경고를 표시할 수 있습니다. 이것은 오탐(False Positive)이며, 악성 소프트웨어가 아닙니다.
+이미지 표시
+이미지 표시
+이미지 표시
 
-■ 프로그램 기능 설명 : 네이버 끝판왕 : (https://blog.naver.com/garpsu/224213400580)
+🚀 What is KootPanKing?
+KootPanKing is a Windows desktop clock app that doubles as a
+full PC remote control system via Telegram bot.
+It stays running in the system tray — so your Telegram bot is
+always alive, always ready.
 
-🛡️ 설치 시 경고가 뜨는 경우
------------
-STEP 1 — ZIP 파일을 다운로드 받은 직후, 압축 풀기 전에 이 그림과 같은 작업을 먼저 하세요.
------------
-다운로드된 .zip 파일을 우클릭
+✨ Key Features
+🤖 Telegram Remote Control
+CommandDescription/captureCapture clock screen → send to Telegram/sFull screen capture → send to Telegram/c1~/c4Capture specific monitor (1~4)/cmdExecute DOS/CMD commands remotely/psExecute PowerShell commands remotely/downShutdown PC remotely (with confirmation)/rebootReboot PC remotely (with confirmation)/whGet PC info (IP, OS, username)/textSend text → auto-save to PC/saveSave files to PC remotely/msQuery Google Calendar schedule/nsQuery Naver Calendar schedule/hShow command list
+🕐 Analog Clock
 
-[속성] 클릭
+Beautiful analog clock always visible in system tray
+Always-on-top display option
+World clock support (15 cities)
+Chime & alarm system
 
-하단의 "차단 해제" 체크박스 클릭
+📡 Integrations
 
-✅적용 , 확인 클릭
+Google Calendar
+Naver Calendar
+Gmail
+KakaoTalk message mirroring
+CCTV / YouTube live background feed
+Windows auto-start
+Auto-update system
 
-이후 압축 해제
+> ⚠️ Current UI language: Korean only.  
+> English UI is planned for the next major release.  
+> All Telegram commands work in English.
 
------------
-STEP 2 — SmartScreen 경고 창이 뜨는 경우
------------
-EXE 실행 시 [파란 경고창]이 뜨면:
+💡 Why Telegram?
+Most remote control tools require:
+OthersKootPanKing❌ Port forwarding✅ Zero network config❌ VPN setup✅ Works behind any router❌ Static IP required✅ Works from anywhere❌ Paid subscription✅ Free (Telegram is free)
+KootPanKing uses Telegram bot as a secure relay —
+no server, no cloud, your PC talks directly to your phone.
 
-→ "추가 정보" 클릭 → "실행" 클릭 하면 정상 실행됩니다.
+📦 Installation
 
------------
-STEP 3 — Windows Defender가 삭제/격리한 경우
------------
+Download KootPanKing.zip from Releases
+Before extracting: Right-click ZIP → Properties →
+Check "Unblock" → Apply
+Extract and run KootPanKing.exe
 
-작업 표시줄의 방패 아이콘 클릭 (Windows 보안)
 
-바이러스 및 위협 방지 클릭
+⚠️ Windows SmartScreen may warn on first run.
+Click "More info" → "Run anyway"
+Source code is fully open — build it yourself if unsure.
 
-보호 기록 클릭
 
-해당 파일 선택 → "복원" 클릭
-
-이후 "장치에서 허용" 클릭
-
------------
-🔍 이 프로그램이 안전한 이유
------------
-
-✅ 소스 코드 전체 공개 (이 저장소에서 직접 확인 가능)
-
-✅ 누구나 직접 빌드 가능 (_ReleaseBLD_All.bat 실행)
-
-의심스러우면 직접 빌드하세요 👇
-
------------
-🔨 Java 개발자가 직접 빌드하는 방법
------------
-
-```bat
-# 사전 조건: JDK 17 이상 설치
-# 저장소 클론 후:
+🔨 Build from Source
+bash# Requirements: JDK 17+
+# Clone this repository, then:
 
 _ReleaseBLD_All.bat
-```
 
-빌드 결과물은 dist\KootPanKing\KootPanKing.exe 에 생성됩니다.
+# Output: dist\KootPanKing\KootPanKing.exe
 
-📬 문의
+🤖 Telegram Bot Setup (5 minutes)
 
-경고 외에 실제 오류가 발생하면 garpsu@naver.com 에 제보해 주세요.
-
-■ 프로그램 기능 설명 : 네이버 끝판왕 : (https://blog.naver.com/garpsu/224213400580)
-
-■ ZIP 다운로드 : https://github.com/GarpsuKim/KootPanKing/releases/download/v1.0.0/KootPanKing.zip
-
-//
-
-<img width="499" height="578" alt="image" src="https://github.com/user-attachments/assets/8621087b-327f-4d63-a97e-fb9d3811d161" />
+Open Telegram → search @BotFather
+Send /newbot → follow instructions → copy the token
+Send any message to your new bot
+Visit https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
+Find your Chat ID in the response
+Enter token + Chat ID in KootPanKing settings → Done ✅
 
 
+🛡️ Security
+
+All commands are restricted to your Chat ID only
+Dangerous commands (/down, /reboot) require confirmation
+Source code is fully open for inspection
+No data is sent to any third-party server
+
+
+📬 Contact
+
+📧 Email: garpsu@naver.com
+📝 Blog: https://blog.naver.com/garpsu
+
+
+⭐ If this helped you, please give it a Star!
+It helps others discover this project.

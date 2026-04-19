@@ -3,7 +3,7 @@
 Control your PC from anywhere through any router —
 no port forwarding, no VPN, just Telegram.
 
-Youtube : https://youtu.be/uxmMIlMyVZE?si=FDz8WJ2lbRVow6Qc&t=3
+Youtube : https://www.youtube.com/@garpsu.smartkim4069/featured
 
 
 🚀 What is KootPanKing?
